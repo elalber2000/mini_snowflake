@@ -1,66 +1,10 @@
 from pathlib import Path
-
-import duckdb
-import pandas as pd
+import os
 
 MSF_PATH = Path(__file__).resolve().parents[1]
 
-
-def delete_parquet(parquet_path: str | Path) -> None:
-    """
-    Delete a parquet file if it exists.
-
-    This is intentionally explicit (no silent overwrite here),
-    so callers can choose when deletion is acceptable.
-    """
-    parquet_path = Path(parquet_path)
-
-    if parquet_path.exists():
-        parquet_path.unlink()
-
-
-def write_parquet_overwrite(df: pd.DataFrame, parquet_path: str | Path) -> Path:
-    parquet_path = Path(parquet_path)
-    parquet_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Delete
-    delete_parquet(parquet_path)
-
-    # Create
-    con = duckdb.connect()
-    try:
-        con.register("df", df)
-
-        con.execute(
-            """
-            COPY (
-                SELECT *
-                FROM df
-            )
-            TO ?
-            (FORMAT PARQUET)
-            """,
-            [str(parquet_path)],
-        )
-    finally:
-        con.close()
-
-    return parquet_path
-
-
-def read_parquet(parquet_path: str | Path) -> pd.DataFrame:
-    parquet_path = Path(parquet_path)
-
-    if not parquet_path.exists():
-        raise FileNotFoundError(parquet_path)
-
-    con = duckdb.connect()
-    try:
-        df = con.execute(
-            "SELECT * FROM read_parquet(?)",
-            [str(parquet_path)],
-        ).df()
-    finally:
-        con.close()
-
-    return df
+def _atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)

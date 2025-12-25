@@ -1,7 +1,9 @@
 from pathlib import Path
 import pandas as pd
 
-from mini_snowflake.common.utils import write_parquet_overwrite, read_parquet, delete_parquet, MSF_PATH
+from mini_snowflake.common.utils import MSF_PATH
+from mini_snowflake.common.io_parquet import write_parquet_overwrite, read_parquet, delete_parquet
+
 
 
 def main() -> None:

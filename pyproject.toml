@@ -1,0 +1,53 @@
+[project]
+name = "mini-snowflake"
+version = "0.1.0"
+description = "Mini Snowflake: coordinator + worker over DuckDB + Parquet (single project)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "duckdb>=1.4,<1.5",
+  "pandas>=2.3.3",
+]
+
+[project.scripts]
+mini-snow = "mini_snowflake.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=69", "uv"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+  "ruff",
+  "mypy",
+  "pytest",
+  "pytest-cov",
+  "pytest-xdist",
+  "pre-commit",
+  "types-click",
+  "pandas-stubs",
+  "ipykernel",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+extend-select = ["I", "UP", "B", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+mypy_path = "src"
+explicit_package_bases = true

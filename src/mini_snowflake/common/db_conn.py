@@ -1,8 +1,5 @@
-from dataclasses import dataclass
 from pathlib import Path
-
-from mini_snowflake.common.models import Catalog
-
+from mini_snowflake.common.catalog import Catalog
 
 
 class DBConn():

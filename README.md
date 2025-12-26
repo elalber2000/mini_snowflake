@@ -11,11 +11,6 @@ execute("
         event_time  TIMESTAMP
     )
 ")
-// Valida si existe en el catalog
-// Crea la folder
-// - Crea manifest
-// - Update/Crea catalog
-// - Crea shards
 
 df = pd.DataFrame(
     {
@@ -52,7 +47,6 @@ execute(
     "INSERT INTO events",
     df
 )
-// Inserta en shard o crea nueva
 
 execute("
     SELECT *

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Final
 
-from mini_snowflake.common.models import ColumnInfo
+from mini_snowflake.common.manifest import ColumnInfo
 
 AggFuncStr: Final = ("count", "sum", "min", "max", "avg")
 AggFunc = Literal["count", "sum", "min", "max", "avg"]

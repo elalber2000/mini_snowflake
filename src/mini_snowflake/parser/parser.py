@@ -1,4 +1,4 @@
-from mini_snowflake.common.models import ColumnInfo
+from mini_snowflake.common.manifest import ColumnInfo
 from mini_snowflake.parser.models import AggExpr, AggFunc, AggFuncStr, CmpStr, ColumnRef, CreateQuery, DropQuery, InsertQuery, NullCondStr, PredicateTerm, SelectQuery
 import re
 

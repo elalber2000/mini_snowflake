@@ -25,3 +25,5 @@ repos:
           - matplotlib-stubs
           - gradio
           - duckdb==1.4.3
+          - pyarrow-stubs
+          - pyarrow

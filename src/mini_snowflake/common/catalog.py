@@ -1,11 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Literal
+
 import json
-import os
-import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from mini_snowflake.common.utils import _atomic_write_text, _curr_date, _validate_types
 
@@ -15,19 +13,15 @@ class TableEntry:
     table_id: str
 
     def validate(self) -> None:
-        _validate_types(
-            (
-                (self.table_id, str),
-            )
-        )
+        _validate_types(((self.table_id, str),))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "table_id": self.table_id,
         }
-    
+
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> Catalog:
+    def from_dict(cls, d: dict[str, Any]) -> TableEntry:
         c = cls(
             table_id=str(d.get("table_id", "")),
         )
@@ -42,13 +36,8 @@ class Catalog:
     tables: dict[str, TableEntry] = field(default_factory=dict)
 
     def validate(self) -> None:
-        assert self.version==1, "Expected version 1"
-        _validate_types(
-            (
-                (self.version, int),
-                (self.created_at, str)
-            )
-        )
+        assert self.version == 1, "Expected version 1"
+        _validate_types(((self.version, int), (self.created_at, str)))
         for table in self.tables.values():
             table.validate()
 
@@ -64,7 +53,9 @@ class Catalog:
         c = cls(
             version=int(d.get("version", 1)),
             created_at=str(d.get("created_at", _curr_date())),
-            tables={k: TableEntry.from_dict(v) for k, v in dict(d.get("tables", {})).items()},
+            tables={
+                k: TableEntry.from_dict(v) for k, v in dict(d.get("tables", {})).items()
+            },
         )
         c.validate()
         return c
@@ -81,10 +72,13 @@ class Catalog:
     def save(self, catalog_path: str | Path) -> Path:
         catalog_path = Path(catalog_path)
         self.validate()
-        text = json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        text = (
+            json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n"
+        )
         _atomic_write_text(catalog_path, text)
         return catalog_path
-    
+
     def create_table(
         self,
         table_name: str,
@@ -112,11 +106,11 @@ class Catalog:
     ):
         self._table_in_catalog(table_name)
         return self.tables[table_name]
-    
+
     def drop_table(
         self,
         table_name: str,
         exist_ok: bool = False,
     ):
         self._table_in_catalog(table_name, exist_ok=exist_ok)
-        del(self.tables[table_name])
+        del self.tables[table_name]

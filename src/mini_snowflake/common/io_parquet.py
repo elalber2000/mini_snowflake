@@ -1,6 +1,8 @@
+from pathlib import Path
+
 import duckdb
 import pandas as pd
-from pathlib import Path
+
 
 def delete_parquet(parquet_path: str | Path) -> None:
     """

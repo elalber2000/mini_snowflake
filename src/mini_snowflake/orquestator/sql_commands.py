@@ -1,15 +1,14 @@
-import json
-from pathlib import Path
 import re
 import shutil
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.dataset as ds
 from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import ColumnInfo, Manifest
 from mini_snowflake.common.utils import MSF_PATH
 from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery
-import pyarrow as pa
-import pyarrow.dataset as ds
+
 
 def drop_command(conn: DBConn, query: DropQuery):
     # Update catalog
@@ -40,18 +39,23 @@ def create_command(conn: DBConn, query: CreateQuery):
         schema=query.schema,
     )
     manifest.save(manifest_path)
-    
+
     # - Update/Create catalog
     conn.catalog.create_table(
         table_name=query.table,
         table_id=manifest.table_id,
     )
-    
+
     # Save catalog and manifest
     conn.catalog.save(conn.catalog_path)
 
     # Output
     return f"Successfully created table '{query.table}'"
+
+
+def _get_shard_i(path: str) -> int:
+    match = re.search(r"shard-([^.]+)\.parquet", path)
+    return int(match.group(1)) if match else 0
 
 
 def insert_command(
@@ -61,21 +65,22 @@ def insert_command(
     rows_per_shard: int | None = None,
 ):
     table_path = conn.path / query.table
-    if not table_path.exists:
+    if not table_path.exists():
         raise NameError(f"Table '{query.table}' doesn't exist")
-    
+
     manifest_path = table_path / "manifest.json"
-    if not manifest_path.exists:
+    if not manifest_path.exists():
         raise NameError(f"Table '{query.table}' doesn't have a Manifest")
-    
+
     manifest = Manifest.load(manifest_path)
     if manifest.shards == []:
         last_shard = 0
     else:
-        last_shard = max([
-            int(re.search(r"shard-([^\.]+)\.parquet", s).group(1))
-            for s in manifest.shards
-        ]) + 1
+        last_shard = max([_get_shard_i(s) for s in manifest.shards]) + 1
+
+    rows_per_shard = (
+        rows_per_shard if rows_per_shard is not None else manifest.rows_per_shard
+    )
 
     # Convert to Arrow
     tb = pa.Table.from_pandas(df, preserve_index=False)
@@ -104,13 +109,12 @@ def insert_command(
     return f"Successfully inserted data into table '{query.table}'"
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     path = MSF_PATH / "data" / "dummy_db"
     conn = DBConn(
         path=path,
         exist_ok=True,
     )
-
 
     print(
         drop_command(
@@ -136,7 +140,7 @@ if __name__=="__main__":
                         name="col2",
                         type="varchar",
                     ),
-                ]
+                ],
             ),
         )
     )
@@ -144,13 +148,13 @@ if __name__=="__main__":
     print(
         insert_command(
             conn,
-            InsertQuery(
-                table="dummy_table"
+            InsertQuery(table="dummy_table"),
+            pd.DataFrame(
+                {
+                    "col1": [1, 2],
+                    "col2": ["foo", "bar"],
+                }
             ),
-            pd.DataFrame({
-                "col1": [1, 2],
-                "col2": ["foo", "bar"],
-            }),
             rows_per_shard=3,
         )
     )
@@ -158,13 +162,13 @@ if __name__=="__main__":
     print(
         insert_command(
             conn,
-            InsertQuery(
-                table="dummy_table"
+            InsertQuery(table="dummy_table"),
+            pd.DataFrame(
+                {
+                    "col1": [3, 4, 5, 6],
+                    "col2": ["a", "b", "c", "d"],
+                }
             ),
-            pd.DataFrame({
-                "col1": [3, 4, 5, 6],
-                "col2": ["a", "b", "c", "d"],
-            }),
             rows_per_shard=3,
         )
     )

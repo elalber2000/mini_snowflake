@@ -1,11 +1,13 @@
 from __future__ import annotations
+
+import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-import json
-import uuid
 
 from mini_snowflake.common.utils import _atomic_write_text, _curr_date, _validate_types
+
 
 @dataclass(frozen=True)
 class ColumnInfo:
@@ -34,6 +36,7 @@ class ColumnInfo:
 
     def to_dict(self) -> dict[str, Any]:
         return {"name": self.name, "type": self.type, "nullable": self.nullable}
+
 
 @dataclass
 class Manifest:
@@ -94,6 +97,9 @@ class Manifest:
     def save(self, manifest_path: str | Path) -> Path:
         manifest_path = Path(manifest_path)
         self.validate()
-        text = json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        text = (
+            json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n"
+        )
         _atomic_write_text(manifest_path, text)
         return manifest_path

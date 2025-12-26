@@ -1,6 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Literal, Final
+from typing import Final, Literal
 
 from mini_snowflake.common.manifest import ColumnInfo
 
@@ -13,10 +14,12 @@ Cmp = Literal["=", "!=", "<", "<=", ">", ">="]
 NullCondStr = ("is_null", "is_not_null")
 NullCond = Literal["is_null", "is_not_null"]
 
+
 @dataclass(frozen=True)
 class ColumnRef:
     name: str
     alias: str | None = None
+
 
 @dataclass(frozen=True)
 class AggExpr:
@@ -24,11 +27,13 @@ class AggExpr:
     col: str | None
     alias: str | None = None
 
+
 @dataclass(frozen=True)
 class PredicateTerm:
     col: str
     op: Cmp | NullCond
     value: int | float | str | None | bool = None
+
 
 @dataclass(frozen=True)
 class SelectQuery:
@@ -37,14 +42,17 @@ class SelectQuery:
     where: list[PredicateTerm] | None
     group_by: list[str] | None
 
+
 @dataclass(frozen=True)
 class CreateQuery:
     table: str
     schema: list[ColumnInfo]
 
+
 @dataclass(frozen=True)
 class InsertQuery:
     table: str
+
 
 @dataclass(frozen=True)
 class DropQuery:

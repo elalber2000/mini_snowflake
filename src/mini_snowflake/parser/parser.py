@@ -1,19 +1,33 @@
-from mini_snowflake.common.manifest import ColumnInfo
-from mini_snowflake.parser.models import AggExpr, AggFunc, AggFuncStr, CmpStr, ColumnRef, CreateQuery, DropQuery, InsertQuery, NullCondStr, PredicateTerm, SelectQuery
 import re
+from typing import cast
+
+from mini_snowflake.common.manifest import ColumnInfo
+from mini_snowflake.parser.models import (
+    AggExpr,
+    AggFunc,
+    AggFuncStr,
+    Cmp,
+    CmpStr,
+    ColumnRef,
+    CreateQuery,
+    DropQuery,
+    InsertQuery,
+    NullCond,
+    NullCondStr,
+    PredicateTerm,
+    SelectQuery,
+)
+
 
 def lower_outside_quotes(s: str) -> str:
     parts = re.split(r"('.*?')", s)
-    return "".join(
-        part if part.startswith("'") else part.lower()
-        for part in parts
-    )
+    return "".join(part if part.startswith("'") else part.lower() for part in parts)
+
 
 def preprocess_query(query: str) -> str:
     query = lower_outside_quotes(query)
     return (
-        query
-        .replace("group by", "group_by")
+        query.replace("group by", "group_by")
         .replace(",", " , ")
         .replace("(", " ( ")
         .replace(")", " ) ")
@@ -23,49 +37,51 @@ def preprocess_query(query: str) -> str:
         .replace("if exists", "if_exists")
     )
 
-def parse(query: str) -> SelectQuery:
+
+def parse(query: str) -> SelectQuery | CreateQuery | InsertQuery | DropQuery:
     query = preprocess_query(query)
 
     toks = query.split()
-    if toks[0]=="select":
+    if toks[0] == "select":
         return parse_select(toks[1:])
-    elif toks[0]=="create":
+    elif toks[0] == "create":
         return parse_create(toks[1:])
-    elif toks[0]=="insert":
+    elif toks[0] == "insert":
         return parse_insert(toks[1:])
-    elif toks[0]=="drop":
+    elif toks[0] == "drop":
         return parse_drop(toks[1:])
     raise ValueError(f"Error at token (0) {toks[0]}")
 
+
 def parse_drop(toks: list[str]) -> DropQuery:
     assert toks[0] == "table"
-    if len(toks)==2:
-        return DropQuery(table=toks[1], if_exist=False)
-    elif len(toks)==3:
-        assert toks[2]=="if_exists"
+    if len(toks) == 2:
+        return DropQuery(table=toks[1], if_exists=False)
+    elif len(toks) == 3:
+        assert toks[2] == "if_exists"
         return DropQuery(table=toks[1], if_exists=True)
     else:
-        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}")
+        raise TypeError(f"Error parsing '{' '.join(toks)}': Invalid tokenization")
 
 
 def parse_insert(toks: list[str]) -> InsertQuery:
-    assert len(toks)==2
+    assert len(toks) == 2
     assert toks[0] == "into"
     return InsertQuery(table=toks[1])
-    
+
 
 def parse_create(toks: list[str]) -> CreateQuery:
-    assert toks[0]=="table"
-    assert toks[2]=="(" and toks[-1]==")"
+    assert toks[0] == "table"
+    assert toks[2] == "(" and toks[-1] == ")"
 
     table = toks[1]
     schema = []
     col = []
     selected_toks = toks[3:-1]
     for count, tok in enumerate(selected_toks):
-        if count==len(selected_toks)-1:
+        if count == len(selected_toks) - 1:
             col.append(tok)
-        if tok == "," or count==len(selected_toks)-1:
+        if tok == "," or count == len(selected_toks) - 1:
             schema.append(parse_create_col(col))
             col = []
         else:
@@ -76,14 +92,15 @@ def parse_create(toks: list[str]) -> CreateQuery:
         schema=schema,
     )
 
-def parse_create_col(toks: list[str]) -> CreateQuery:
+
+def parse_create_col(toks: list[str]) -> ColumnInfo:
     try:
-        if len(toks)==2:
+        if len(toks) == 2:
             return ColumnInfo(
                 name=toks[0],
                 type=toks[1],
             )
-        elif len(toks)==3:
+        elif len(toks) == 3:
             assert toks[2] == "is_not_null"
             return ColumnInfo(
                 name=toks[0],
@@ -93,14 +110,14 @@ def parse_create_col(toks: list[str]) -> CreateQuery:
         else:
             raise ValueError("Invalid Tokenization")
     except Exception as e:
-        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}")
+        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}") from e
 
 
 def parse_select(toks: list[str]) -> SelectQuery:
-    select_rows = parse_select_cols(toks[:toks.index("from")])
-    table_name = toks[toks.index("from")+1]
-    where_rows = parse_where(toks[toks.index("where")+1:toks.index("group_by")])
-    groupby_tables = parse_groupby(toks[toks.index("group_by")+1:toks.index(";")])
+    select_rows = parse_select_cols(toks[: toks.index("from")])
+    table_name = toks[toks.index("from") + 1]
+    where_rows = parse_where(toks[toks.index("where") + 1 : toks.index("group_by")])
+    groupby_tables = parse_groupby(toks[toks.index("group_by") + 1 : toks.index(";")])
 
     return SelectQuery(
         table=table_name,
@@ -109,109 +126,109 @@ def parse_select(toks: list[str]) -> SelectQuery:
         group_by=groupby_tables,
     )
 
+
 def parse_select_cols(toks: list[str]):
     res = []
     col = []
     for count, tok in enumerate(toks):
-        if count==len(toks)-1:
+        if count == len(toks) - 1:
             col.append(tok)
-        if tok == "," or count==len(toks)-1:
+        if tok == "," or count == len(toks) - 1:
             res.append(parse_select_col(col))
             col = []
         else:
             col.append(tok)
     return res
 
+
 def parse_select_col(toks: list[str]):
     try:
         if toks[0] in AggFuncStr:
             assert toks[1] == "(" and toks[3] == ")"
-            if len(toks)<=4:
+            if len(toks) <= 4:
                 return AggExpr(
-                    func=toks[0],
+                    func=cast(AggFunc, toks[0]),
                     col=toks[2],
                 )
             assert toks[4] == "as"
             return AggExpr(
-                    func=toks[0],
-                    col=toks[2],
-                    alias=toks[5],
-                )
+                func=cast(AggFunc, toks[0]),
+                col=toks[2],
+                alias=toks[5],
+            )
         else:
-            if len(toks)==1:
+            if len(toks) == 1:
                 return ColumnRef(name=toks[0])
-            elif len(toks)==3:
-                assert toks[1]=="as"
+            elif len(toks) == 3:
+                assert toks[1] == "as"
                 return ColumnRef(name=toks[0], alias=toks[2])
         raise ValueError("Invalid Tokenization")
     except Exception as e:
         print(f"Error parsing '{' '.join(toks)}': {e}")
 
+
 def parse_where(toks: list[str]):
     res = []
     expr = []
     for count, tok in enumerate(toks):
-        if count==len(toks)-1:
+        if count == len(toks) - 1:
             expr.append(tok)
-        if tok == "and" or count==len(toks)-1:
+        if tok == "and" or count == len(toks) - 1:
             res.append(parse_where_expr(expr))
             expr = []
         else:
             expr.append(tok)
     return res
 
+
 def parse_where_expr(toks: list[str]):
     try:
         if len(toks) == 2:
-            assert(toks[1] in NullCondStr)
+            assert toks[1] in NullCondStr
             return PredicateTerm(
-                    col=toks[0],
-                    op=toks[1],
-                )
+                col=toks[0],
+                op=cast(NullCond, toks[1]),
+            )
         elif len(toks) == 3:
             assert toks[1] in CmpStr
 
+            value: int | float | str
             if toks[2].isdigit():
                 value = int(toks[2])
-            elif (
-                toks[2].count(".") == 1 and
-                toks[2].replace(".", "").isdigit()
-            ):
+            elif toks[2].count(".") == 1 and toks[2].replace(".", "").isdigit():
                 value = float(toks[2])
-            elif(
-                toks[2].startswith("'") and
-                toks[2].endswith("'")
-            ):
+            elif toks[2].startswith("'") and toks[2].endswith("'"):
                 value = toks[2][1:-1]
+            else:
+                raise ValueError(f"Cannot parse expresion {value}")
 
             return PredicateTerm(
-                    col=toks[0],
-                    op=toks[1],
-                    value=value,
-                )
+                col=toks[0],
+                op=cast(Cmp, toks[1]),
+                value=value,
+            )
         raise ValueError("Invalid Tokenization")
     except Exception as e:
         print(f"Error parsing '{' '.join(toks)}': {e}")
 
 
 def parse_groupby(toks: list[str]):
-    if len(toks)==1:
+    if len(toks) == 1:
         return toks
 
     try:
         res = []
         for count, tok in enumerate(toks):
-            if count%2==0:
+            if count % 2 == 0:
                 res.append(tok)
             else:
-                assert tok==","
+                assert tok == ","
         raise ValueError("Invalid Tokenization")
     except Exception as e:
         print(f"Error parsing '{' '.join(toks)}': {e}")
-            
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     select_query_str = """
         SELECT
             event_type,
@@ -265,8 +282,7 @@ if __name__=="__main__":
         group_by=["event_type"],
     )
 
-    print(parse(select_query_str)==select_query_class)
-
+    print(parse(select_query_str) == select_query_class)
 
     create_query_str = """
         CREATE TABLE events(
@@ -279,30 +295,23 @@ if __name__=="__main__":
     """
 
     create_query_class = CreateQuery(
-        table = "events",
+        table="events",
         schema=[
+            ColumnInfo(name="event_id", type="int"),
+            ColumnInfo(name="user_id", type="int"),
+            ColumnInfo(name="event_type", type="varchar"),
             ColumnInfo(
-                name="event_id", type="int"
+                name="value",
+                type="double",
+                nullable=False,
             ),
-            ColumnInfo(
-                name="user_id", type="int"
-            ),
-            ColumnInfo(
-                name="event_type", type="varchar"
-            ),
-            ColumnInfo(
-                name="value", type="double", nullable=False,
-            ),
-            ColumnInfo(
-                name="event_time", type="timestamp"
-            ),
-        ]
+            ColumnInfo(name="event_time", type="timestamp"),
+        ],
     )
 
-    print(parse(create_query_str)==create_query_class)
-
+    print(parse(create_query_str) == create_query_class)
 
     insert_query_str = "INSERT INTO events"
     insert_query_class = InsertQuery(table="events")
 
-    print(parse(create_query_str)==create_query_class)
+    print(parse(create_query_str) == create_query_class)

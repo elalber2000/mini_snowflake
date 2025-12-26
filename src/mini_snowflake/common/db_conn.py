@@ -1,11 +1,12 @@
 from pathlib import Path
+
 from mini_snowflake.common.catalog import Catalog
 
 
-class DBConn():
+class DBConn:
     def __init__(
         self,
-        path: str,
+        path: str | Path,
         exist_ok: bool = False,
     ):
         # Crear db

@@ -38,20 +38,17 @@ def _validate_types(spec: tuple[tuple[object, type], ...]) -> None:
 @dataclass(frozen=True)
 class TableEntry:
     table_id: str
-    path: str
 
     def validate(self) -> None:
         _validate_types(
             (
                 (self.table_id, str),
-                (self.path, str)
             )
         )
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "table_id": self.table_id,
-            "path": self.path,
         }
 
 
@@ -104,6 +101,28 @@ class Catalog:
         text = json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         _atomic_write_text(catalog_path, text)
         return catalog_path
+    
+    def create_table(
+        self,
+        table_name: str,
+        table_id: str,
+    ):
+        if table_name in self.tables:
+            raise IndexError(f"Table '{table_name}' already exists in catalog")
+        self.tables[table_name] = TableEntry(
+            table_id=table_id,
+        )
+    
+    def drop_table(
+        self,
+        table_name: str,
+        exist_ok: bool = False,
+    ):
+        if table_name not in self.tables:
+            if exist_ok:
+                return
+            raise IndexError(f"Table '{table_name}' doesn't exist in catalog")
+        del(self.tables[table_name])
 
     
 @dataclass(frozen=True)
@@ -156,7 +175,7 @@ class Manifest:
         )
         for shard in self.shards:
             _validate_types(((shard, str)))
-        for col in self.schema.values():
+        for col in self.schema:
             col.validate()
 
     def to_dict(self) -> dict[str, Any]:

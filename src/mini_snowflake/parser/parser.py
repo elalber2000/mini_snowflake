@@ -1,4 +1,5 @@
-from mini_snowflake.parser.models import AggExpr, AggFunc, AggFuncStr, CmpStr, ColumnRef, NullCondStr, PredicateTerm, Query
+from mini_snowflake.common.models import ColumnInfo
+from mini_snowflake.parser.models import AggExpr, AggFunc, AggFuncStr, CmpStr, ColumnRef, CreateQuery, DropQuery, InsertQuery, NullCondStr, PredicateTerm, SelectQuery
 import re
 
 def lower_outside_quotes(s: str) -> str:
@@ -19,24 +20,89 @@ def preprocess_query(query: str) -> str:
         .replace(";", " ; ")
         .replace("is null", "is_null")
         .replace("is not null", "is_not_null")
+        .replace("if exists", "if_exists")
     )
 
-def parse(query: str) -> Query:
+def parse(query: str) -> SelectQuery:
     query = preprocess_query(query)
 
     toks = query.split()
     if toks[0]=="select":
         return parse_select(toks[1:])
+    elif toks[0]=="create":
+        return parse_create(toks[1:])
+    elif toks[0]=="insert":
+        return parse_insert(toks[1:])
+    elif toks[0]=="drop":
+        return parse_drop(toks[1:])
     raise ValueError(f"Error at token (0) {toks[0]}")
 
+def parse_drop(toks: list[str]) -> DropQuery:
+    assert toks[0] == "table"
+    if len(toks)==2:
+        return DropQuery(table=toks[1], if_exist=False)
+    elif len(toks)==3:
+        assert toks[2]=="if_exists"
+        return DropQuery(table=toks[1], if_exists=True)
+    else:
+        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}")
 
-def parse_select(toks: list[str]) -> Query:
+
+def parse_insert(toks: list[str]) -> InsertQuery:
+    assert len(toks)==2
+    assert toks[0] == "into"
+    return InsertQuery(table=toks[1])
+    
+
+def parse_create(toks: list[str]) -> CreateQuery:
+    assert toks[0]=="table"
+    assert toks[2]=="(" and toks[-1]==")"
+
+    table = toks[1]
+    schema = []
+    col = []
+    selected_toks = toks[3:-1]
+    for count, tok in enumerate(selected_toks):
+        if count==len(selected_toks)-1:
+            col.append(tok)
+        if tok == "," or count==len(selected_toks)-1:
+            schema.append(parse_create_col(col))
+            col = []
+        else:
+            col.append(tok)
+
+    return CreateQuery(
+        table=table,
+        schema=schema,
+    )
+
+def parse_create_col(toks: list[str]) -> CreateQuery:
+    try:
+        if len(toks)==2:
+            return ColumnInfo(
+                name=toks[0],
+                type=toks[1],
+            )
+        elif len(toks)==3:
+            assert toks[2] == "is_not_null"
+            return ColumnInfo(
+                name=toks[0],
+                type=toks[1],
+                nullable=False,
+            )
+        else:
+            raise ValueError("Invalid Tokenization")
+    except Exception as e:
+        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}")
+
+
+def parse_select(toks: list[str]) -> SelectQuery:
     select_rows = parse_select_cols(toks[:toks.index("from")])
     table_name = toks[toks.index("from")+1]
     where_rows = parse_where(toks[toks.index("where")+1:toks.index("group_by")])
     groupby_tables = parse_groupby(toks[toks.index("group_by")+1:toks.index(";")])
 
-    return Query(
+    return SelectQuery(
         table=table_name,
         select=select_rows,
         where=where_rows,
@@ -146,7 +212,7 @@ def parse_groupby(toks: list[str]):
 
 
 if __name__=="__main__":
-    query_str = """
+    select_query_str = """
         SELECT
             event_type,
             COUNT(*),
@@ -163,7 +229,7 @@ if __name__=="__main__":
         group by event_type;
     """
 
-    query_class = Query(
+    select_query_class = SelectQuery(
         table="events",
         select=[
             ColumnRef(name="event_type"),
@@ -199,4 +265,44 @@ if __name__=="__main__":
         group_by=["event_type"],
     )
 
-    print(parse(query_str)==query_class)
+    print(parse(select_query_str)==select_query_class)
+
+
+    create_query_str = """
+        CREATE TABLE events(
+            event_id    INT,
+            user_id     INT,
+            event_type  VARCHAR,
+            value       DOUBLE IS NOT NULL,
+            event_time  TIMESTAMP
+        )
+    """
+
+    create_query_class = CreateQuery(
+        table = "events",
+        schema=[
+            ColumnInfo(
+                name="event_id", type="int"
+            ),
+            ColumnInfo(
+                name="user_id", type="int"
+            ),
+            ColumnInfo(
+                name="event_type", type="varchar"
+            ),
+            ColumnInfo(
+                name="value", type="double", nullable=False,
+            ),
+            ColumnInfo(
+                name="event_time", type="timestamp"
+            ),
+        ]
+    )
+
+    print(parse(create_query_str)==create_query_class)
+
+
+    insert_query_str = "INSERT INTO events"
+    insert_query_class = InsertQuery(table="events")
+
+    print(parse(create_query_str)==create_query_class)

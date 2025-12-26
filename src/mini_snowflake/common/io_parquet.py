@@ -19,9 +19,6 @@ def write_parquet_overwrite(df: pd.DataFrame, parquet_path: str | Path) -> Path:
     parquet_path = Path(parquet_path)
     parquet_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Delete
-    delete_parquet(parquet_path)
-
     # Create
     con = duckdb.connect()
     try:

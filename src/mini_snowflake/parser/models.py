@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Final
 
+from mini_snowflake.common.models import ColumnInfo
+
 AggFuncStr: Final = ("count", "sum", "min", "max", "avg")
 AggFunc = Literal["count", "sum", "min", "max", "avg"]
 
@@ -29,8 +31,22 @@ class PredicateTerm:
     value: int | float | str | None | bool = None
 
 @dataclass(frozen=True)
-class Query:
+class SelectQuery:
     table: str
     select: list[ColumnRef | AggExpr] | Literal["*"]
     where: list[PredicateTerm] | None
     group_by: list[str] | None
+
+@dataclass(frozen=True)
+class CreateQuery:
+    table: str
+    schema: list[ColumnInfo]
+
+@dataclass(frozen=True)
+class InsertQuery:
+    table: str
+
+@dataclass(frozen=True)
+class DropQuery:
+    table: str
+    if_exists: bool

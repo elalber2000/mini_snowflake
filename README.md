@@ -2,15 +2,15 @@
 Custom implementation of a MiniSnowflake using parallel duckdb instances
 
 
-execute("
-    CREATE TABLE events(
+execute(
+    "CREATE TABLE events(
         event_id    INT,
         user_id     INT,
         event_type  VARCHAR,
         value       DOUBLE,
         event_time  TIMESTAMP
-    )
-")
+    )"
+)
 
 df = pd.DataFrame(
     {
@@ -48,64 +48,61 @@ execute(
     df
 )
 
-execute("
-    SELECT *
+execute(
+    "SELECT *
     FROM events;"
 )
-// Orquestator parsea
-// Orquestator divide en jobs
-// Orquestator manda workers
-execute("
-    SELECT event_id, event_type
-    FROM events;
-")
-execute("
-    SELECT event_id, value
+execute(
+    "SELECT event_id, event_type
+    FROM events;"
+)
+execute(
+    "SELECT event_id, value
     FROM events
     WHERE event_type = 'click'
-        AND value > 1.0;
-")
-execute("
-    SELECT
+        AND value > 1.0;"
+)
+execute(
+    "SELECT
         COUNT(*) AS n,
         SUM(value) AS total_value
-    FROM events;
-")
-execute("
-    SELECT
+    FROM events;"
+)
+execute(
+    "SELECT
         event_type,
         COUNT(*) AS n_events
     FROM events
-    GROUP BY event_type;
-")
-execute("
-    SELECT
+    GROUP BY event_type;"
+)
+execute(
+    "SELECT
         event_type,
         COUNT(*) AS n_events
     FROM events
     WHERE value >= 1.0
-    GROUP BY event_type;
-")
-execute("
-    SELECT
+    GROUP BY event_type;"
+)
+execute(
+    "SELECT
         event_type,
         COUNT(*) AS n,
         SUM(value) AS total,
         AVG(value) AS avg
     FROM events
     WHERE user_id IS NOT NULL
-    GROUP BY event_type;
-")
-execute("
-    SELECT
+    GROUP BY event_type;"
+)
+execute(
+    "SELECT
         event_type,
         COUNT(*) AS n,
         SUM(value) AS total,
         AVG(value) AS avg
     FROM events
     WHERE user_id IS NOT NULL
-    GROUP BY event_type;
-")
+    GROUP BY event_type;"
+)
 
 
 // Test with 1-n docker container workers and plot speed

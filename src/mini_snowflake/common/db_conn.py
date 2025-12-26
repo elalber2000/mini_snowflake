@@ -7,7 +7,7 @@ class DBConn:
     def __init__(
         self,
         path: str | Path,
-        exist_ok: bool = False,
+        exist_ok: bool = True,
     ):
         # Crear db
         self.path = Path(path)

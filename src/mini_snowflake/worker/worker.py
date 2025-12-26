@@ -7,26 +7,10 @@ import pyarrow.dataset as ds
 from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import ColumnInfo, Manifest
 from mini_snowflake.common.utils import MSF_PATH
-from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery
+from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery, SelectQuery
 
 
-def drop_command(conn: DBConn, query: DropQuery):
-    # Update catalog
-    conn.catalog.drop_table(
-        query.table,
-        exist_ok=query.if_exists,
-    )
-
-    # Drop table
-    drop_path = conn.path / query.table
-    if drop_path.exists():
-        shutil.rmtree(drop_path)
-
-    # Output
-    return f"Successfully dropped table '{query.table}'"
-
-
-def create_command(conn: DBConn, query: CreateQuery):
+def worker_create(conn: DBConn, query: CreateQuery):
     # Create table
     table_path = conn.path / query.table
     table_path.mkdir(parents=True)
@@ -53,12 +37,28 @@ def create_command(conn: DBConn, query: CreateQuery):
     return f"Successfully created table '{query.table}'"
 
 
+def worker_drop(conn: DBConn, query: DropQuery):
+    # Update catalog
+    conn.catalog.drop_table(
+        query.table,
+        exist_ok=query.if_exists,
+    )
+
+    # Drop table
+    drop_path = conn.path / query.table
+    if drop_path.exists():
+        shutil.rmtree(drop_path)
+
+    # Output
+    return f"Successfully dropped table '{query.table}'"
+
+
 def _get_shard_i(path: str) -> int:
     match = re.search(r"shard-([^.]+)\.parquet", path)
     return int(match.group(1)) if match else 0
 
 
-def insert_command(
+def worker_insert(
     conn: DBConn,
     query: InsertQuery,
     df: pd.DataFrame,
@@ -117,7 +117,7 @@ if __name__ == "__main__":
     )
 
     print(
-        drop_command(
+        worker_drop(
             conn,
             DropQuery(
                 table="dummy_table",
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     )
 
     print(
-        create_command(
+        worker_create(
             conn,
             CreateQuery(
                 table="dummy_table",
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     )
 
     print(
-        insert_command(
+        worker_insert(
             conn,
             InsertQuery(table="dummy_table"),
             pd.DataFrame(
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     )
 
     print(
-        insert_command(
+        worker_insert(
             conn,
             InsertQuery(table="dummy_table"),
             pd.DataFrame(

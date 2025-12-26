@@ -97,20 +97,21 @@ class Catalog:
     ):
         if table_name not in self.tables:
             if exist_ok:
-                return
+                return False
             raise IndexError(f"Table '{table_name}' doesn't exist in catalog")
+        return True
 
     def get_table(
         self,
         table_name: str,
     ):
-        self._table_in_catalog(table_name)
-        return self.tables[table_name]
+        if self._table_in_catalog(table_name):
+            return self.tables[table_name]
 
     def drop_table(
         self,
         table_name: str,
         exist_ok: bool = False,
     ):
-        self._table_in_catalog(table_name, exist_ok=exist_ok)
-        del self.tables[table_name]
+        if self._table_in_catalog(table_name, exist_ok=exist_ok):
+            del self.tables[table_name]

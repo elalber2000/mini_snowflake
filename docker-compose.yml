@@ -1,0 +1,28 @@
+services:
+  orchestrator:
+    build: .
+    command: uvicorn mini_snowflake.orquestrator.api:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+
+  worker1:
+    build: .
+    command: uvicorn mini_snowflake.worker.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - WORKER_ID=w1
+      - BASE_URL=http://worker1:8000
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - HEARTBEAT_SECONDS=5
+    depends_on:
+      - orchestrator
+
+  worker2:
+    build: .
+    command: uvicorn mini_snowflake.worker.main:app --host 0.0.0.0 --port 8000
+    environment:
+      - WORKER_ID=w2
+      - BASE_URL=http://worker2:8000
+      - ORCHESTRATOR_URL=http://orchestrator:8000
+      - HEARTBEAT_SECONDS=5
+    depends_on:
+      - orchestrator

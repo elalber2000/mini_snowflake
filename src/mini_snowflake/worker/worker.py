@@ -1,3 +1,4 @@
+from pathlib import Path
 import re
 import shutil
 
@@ -6,51 +7,74 @@ import pyarrow as pa
 import pyarrow.dataset as ds
 from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import ColumnInfo, Manifest
-from mini_snowflake.common.utils import MSF_PATH
+from mini_snowflake.common.utils import MSF_PATH, setup_logging
 from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery, SelectQuery
+from .models import CreateRequest, DropRequest, InsertRequest
+import logging
 
+setup_logging()
+logger = logging.getLogger("")
 
-def worker_create(conn: DBConn, query: CreateQuery):
-    # Create table
-    table_path = conn.path / query.table
+def worker_create(
+    conn: DBConn,
+    request: CreateRequest,
+):
+    logger.info(f"worker_create({request})")
+    table = request.table
+    schema = request.table_schema
+    if_not_exists = request.if_not_exists
+
+    if conn.catalog.get_table(table, exist_ok=True) is not None:
+        return f"Table {table} already created"
+
+    logger.info("Creating table")
+    table_path = conn.path / table
     table_path.mkdir(parents=True)
 
-    # - Create manifest
+    logger.info("Create manifest")
     manifest_path = table_path / "manifest.json"
 
     manifest = Manifest(
-        table_name=query.table,
-        schema=query.schema,
+        table_name=table,
+        schema=schema,
     )
     manifest.save(manifest_path)
 
-    # - Update/Create catalog
+    logger.info("Update/Create catalog")
     conn.catalog.create_table(
-        table_name=query.table,
+        table_name=table,
         table_id=manifest.table_id,
     )
 
-    # Save catalog and manifest
+    logger.info("Save catalog and manifest")
     conn.catalog.save(conn.catalog_path)
 
-    # Output
-    return f"Successfully created table '{query.table}'"
+    return f"Successfully created table '{table}'"
 
 
-def worker_drop(conn: DBConn, query: DropQuery):
+def worker_drop(
+    conn: DBConn,
+    request: DropRequest,
+):
+    logger.info(f"worker_drop({request})")
+    table = request.table
+    if_exists = request.if_exists
+
     # Update catalog
     conn.catalog.drop_table(
-        query.table,
-        exist_ok=query.if_exists,
+        table,
+        exist_ok=if_exists,
     )
 
     # Drop table
-    drop_path = conn.path / query.table
+    drop_path = conn.path / table
     if drop_path.exists():
         shutil.rmtree(drop_path)
 
+    conn.catalog.save(conn.catalog_path)
+
     # Output
-    return f"Successfully dropped table '{query.table}'"
+    return f"Successfully dropped table '{table}'"
 
 
 def _get_shard_i(path: str) -> int:
@@ -60,17 +84,29 @@ def _get_shard_i(path: str) -> int:
 
 def worker_insert(
     conn: DBConn,
-    query: InsertQuery,
-    df: pd.DataFrame,
-    rows_per_shard: int | None = None,
+    request: InsertRequest,
 ):
-    table_path = conn.path / query.table
+    logger.info(f"worker_insert({request})")
+    table = request.table
+    src_path = request.src_path
+    rows_per_shard = request.rows_per_shard
+
+    src_path = Path(src_path)
+    suffix = src_path.suffix.lower()
+    if suffix == ".csv":
+        df = pd.read_csv(src_path)
+    elif suffix in {".parquet", ".pq"}:
+        df = pd.read_parquet(src_path)
+    else:
+        raise ValueError(f"Unsupported file type: {suffix}")
+
+    table_path = conn.path / table
     if not table_path.exists():
-        raise NameError(f"Table '{query.table}' doesn't exist")
+        raise NameError(f"Table '{table}' doesn't exist")
 
     manifest_path = table_path / "manifest.json"
     if not manifest_path.exists():
-        raise NameError(f"Table '{query.table}' doesn't have a Manifest")
+        raise NameError(f"Table '{table}' doesn't have a Manifest")
 
     manifest = Manifest.load(manifest_path)
     if manifest.shards == []:
@@ -106,7 +142,7 @@ def worker_insert(
     manifest.save(manifest_path)
 
     # Output
-    return f"Successfully inserted data into table '{query.table}'"
+    return f"Successfully inserted data into table '{table}'"
 
 
 if __name__ == "__main__":

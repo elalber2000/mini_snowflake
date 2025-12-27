@@ -47,11 +47,14 @@ class SelectQuery:
 class CreateQuery:
     table: str
     schema: list[ColumnInfo]
+    if_not_exists: bool
 
 
 @dataclass(frozen=True)
 class InsertQuery:
     table: str
+    src_path: str
+    rows_per_shard: int | None = None
 
 
 @dataclass(frozen=True)

@@ -1,61 +1,109 @@
+from typing import Any
 from mini_snowflake.common.db_conn import DBConn
+from mini_snowflake.common.utils import setup_logging
+from mini_snowflake.worker.models import CreateRequest, DropRequest, InsertRequest, SelectRequest
+from .client import send_task
+from .worker_registry import registry
 from mini_snowflake.parser.models import AggExpr, ColumnRef, CreateQuery, DropQuery, InsertQuery, PredicateTerm, SelectQuery
 from mini_snowflake.parser.parser import parse
+import logging
 
-def orquestrate(raw_query: str, path: str):
+setup_logging()
+logger = logging.getLogger("")
+
+def orchestrate_create(query: CreateQuery, conn: DBConn) -> dict[str, Any]:
+    logger.info("Create request")
+    workers = registry.list_active()
+    if not workers:
+        return {"ok": False, "error": "No active workers"}
+
+    chosen = workers[0]
+    task = CreateRequest(
+        db_path=str(conn.path),
+        table=query.table,
+        table_schema=query.schema,
+        if_not_exists=query.if_not_exists,
+    )
+
+    resp = send_task(chosen.base_url, task, "create")
+
+    return {
+        "ok": resp.ok,
+        "worker_id": chosen.worker_id,
+        "worker_url": chosen.base_url,
+        "result": resp.result,
+        "error": resp.error,
+    }
+
+def orchestrate_drop(query: DropQuery, conn: DBConn) -> dict[str, Any]:
+    logger.info("Drop request")
+    workers = registry.list_active()
+    if not workers:
+        return {"ok": False, "error": "No active workers"}
+
+    chosen = workers[0]
+    task = DropRequest(
+        db_path=str(conn.path),
+        table=query.table,
+        if_exists=query.if_exists,
+    )
+
+    resp = send_task(chosen.base_url, task, "drop")
+
+    return {
+        "ok": resp.ok,
+        "worker_id": chosen.worker_id,
+        "worker_url": chosen.base_url,
+        "result": resp.result,
+        "error": resp.error,
+    }
+
+def orchestrate_insert(query: InsertQuery, conn: DBConn) -> dict[str, Any]:
+    logger.info("Insert request")
+    workers = registry.list_active()
+    if not workers:
+        return {"ok": False, "error": "No active workers"}
+
+    chosen = workers[0]
+    task = InsertRequest(
+        db_path=str(conn.path),
+        table=query.table,
+        src_path=query.src_path,
+        rows_per_shard=query.rows_per_shard,
+    )
+
+    resp = send_task(chosen.base_url, task, "create")
+
+    return {
+        "ok": resp.ok,
+        "worker_id": chosen.worker_id,
+        "worker_url": chosen.base_url,
+        "result": resp.result,
+        "error": resp.error,
+    }
+
+
+def route_external_query(path: str, raw_query: str) -> dict[str, Any]:
+    """
+    External routing: parse and dispatch.
+    For now: only CreateQuery is wired.
+    """
     conn = DBConn(path)
     query = parse(raw_query)
+    out = None
+
     if isinstance(query, CreateQuery):
-        return orquestrate_create(query, conn)
+        out = orchestrate_create(query, conn)
+        out["kind"] = "create"
     if isinstance(query, DropQuery):
-        return orquestrate_drop(query, conn)
-    if isinstance(query, SelectQuery):
-        return orquestrate_create(query, conn)
+        out = orchestrate_drop(query, conn)
+        out["kind"] = "drop"
+    if isinstance(query, InsertQuery):
+        out = orchestrate_insert(query, conn)
+        out["kind"] = "insert"
     
+    if out is not None:
+        return out
 
-def orquestrate_create(query: CreateQuery, conn: DBConn):
-    pass
-
-
-def orquestrate_drop(query: DropQuery, conn: DBConn):
-    pass
-
-
-def orquestrate_select(query: SelectQuery, conn: DBConn):
-
-    SelectQuery(
-        table="events",
-        select=[
-            ColumnRef(name="event_type"),
-            AggExpr(func="count", col="*"),
-            AggExpr(func="count", col="user_id", alias="n_user_id_nonnull"),
-            AggExpr(func="sum", col="value", alias="total_value"),
-            AggExpr(func="avg", col="value", alias="avg_value"),
-            AggExpr(func="min", col="event_time", alias="first_seen"),
-            AggExpr(func="max", col="event_time", alias="last_seen"),
-        ],
-        where=[
-            PredicateTerm(
-                col="event_time",
-                op=">=",
-                value="2025-01-01T00:00:00Z",
-            ),
-            PredicateTerm(
-                col="event_time",
-                op="<",
-                value="2025-02-01T00:00:00Z",
-            ),
-            PredicateTerm(
-                col="value",
-                op=">=",
-                value=0,
-            ),
-            PredicateTerm(
-                col="user_id",
-                op="is_not_null",
-                value=None,
-            ),
-        ],
-        group_by=["event_type"],
-    )
-    pass
+    # Not implemented yet
+    return {"ok": False, "kind": "unknown", "error": f"Unsupported query type: {type(query).__name__}"}

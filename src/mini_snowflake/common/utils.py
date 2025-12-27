@@ -1,8 +1,20 @@
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+import logging
+import sys
 
 MSF_PATH = Path(__file__).resolve().parents[1]
+
+def setup_logging() -> None:
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+
+    logging.basicConfig(
+        level=level,
+        stream=sys.stdout,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
 
 
 def _atomic_write_text(path: Path, text: str) -> None:

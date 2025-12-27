@@ -104,8 +104,9 @@ class Catalog:
     def get_table(
         self,
         table_name: str,
+        exist_ok: bool,
     ):
-        if self._table_in_catalog(table_name):
+        if self._table_in_catalog(table_name, exist_ok):
             return self.tables[table_name]
 
     def drop_table(

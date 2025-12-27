@@ -34,7 +34,9 @@ def preprocess_query(query: str) -> str:
         .replace(";", " ; ")
         .replace("is null", "is_null")
         .replace("is not null", "is_not_null")
+        .replace("if not exists", "if_not_exists")
         .replace("if exists", "if_exists")
+        .replace("rows per shard", "rows_per_shard")
     )
 
 
@@ -65,13 +67,34 @@ def parse_drop(toks: list[str]) -> DropQuery:
 
 
 def parse_insert(toks: list[str]) -> InsertQuery:
-    assert len(toks) == 2
-    assert toks[0] == "into"
-    return InsertQuery(table=toks[1])
+    try:
+        assert toks[0] == "into"
+        table = toks[1]
+        assert toks[2] == "from"
+        src_path = toks[3]
+        if len(toks) == 4:
+            return InsertQuery(table=table, src_path=src_path)
+        elif len(toks)==6:
+            assert toks[4] == "rows_per_shard"
+            return InsertQuery(
+                table=table,
+                src_path=src_path,
+                rows_per_shard=num_cast(toks[5])
+            )
+        raise TypeError(f"Tokenization Error")
+    except Exception as e:
+        raise TypeError(f"Error parsing '{' '.join(toks)}': {e}") from e
 
 
 def parse_create(toks: list[str]) -> CreateQuery:
     assert toks[0] == "table"
+
+    if toks[-1] == "if_not_exists":
+        if_not_exists = True
+        toks = toks[:-1]
+    else:
+        if_not_exists = False
+
     assert toks[2] == "(" and toks[-1] == ")"
 
     table = toks[1]
@@ -90,6 +113,7 @@ def parse_create(toks: list[str]) -> CreateQuery:
     return CreateQuery(
         table=table,
         schema=schema,
+        if_not_exists=if_not_exists,
     )
 
 
@@ -180,6 +204,16 @@ def parse_where(toks: list[str]):
             expr.append(tok)
     return res
 
+def num_cast(val: str) -> int | float | str:
+    if val.isdigit():
+        num_val = int(val)
+    elif val.count(".") == 1 and val.replace(".", "").isdigit():
+        num_val = float(val)
+    elif val.startswith("'") and val.endswith("'"):
+        num_val = val[1:-1]
+    else:
+        raise ValueError(f"Cannot parse expresion {val}")
+    return num_val
 
 def parse_where_expr(toks: list[str]):
     try:
@@ -192,15 +226,7 @@ def parse_where_expr(toks: list[str]):
         elif len(toks) == 3:
             assert toks[1] in CmpStr
 
-            value: int | float | str
-            if toks[2].isdigit():
-                value = int(toks[2])
-            elif toks[2].count(".") == 1 and toks[2].replace(".", "").isdigit():
-                value = float(toks[2])
-            elif toks[2].startswith("'") and toks[2].endswith("'"):
-                value = toks[2][1:-1]
-            else:
-                raise ValueError(f"Cannot parse expresion {value}")
+            value = num_cast(toks[2])
 
             return PredicateTerm(
                 col=toks[0],
@@ -291,7 +317,7 @@ if __name__ == "__main__":
             event_type  VARCHAR,
             value       DOUBLE IS NOT NULL,
             event_time  TIMESTAMP
-        )
+        ) IF NOT EXISTS
     """
 
     create_query_class = CreateQuery(
@@ -307,11 +333,16 @@ if __name__ == "__main__":
             ),
             ColumnInfo(name="event_time", type="timestamp"),
         ],
+        if_not_exists=True,
     )
 
     print(parse(create_query_str) == create_query_class)
 
-    insert_query_str = "INSERT INTO events"
-    insert_query_class = InsertQuery(table="events")
+    insert_query_str = "INSERT INTO events FROM data/path ROWS_PER_SHARD 2"
+    insert_query_class = InsertQuery(
+        table="events",
+        src_path="data/path",
+        rows_per_shard=2
+    )
 
     print(parse(create_query_str) == create_query_class)

@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException
-from .models import HeartbeatRequest, RegisterRequest
-from .worker_registry import WorkerRegistry
+from mini_snowflake.orquestrator.orquestrator import route_external_query
+from .models import ExternalQueryRequest, ExternalQueryResponse, HeartbeatRequest, RegisterRequest
 from dataclasses import asdict
+from .worker_registry import registry
+
 
 app = FastAPI(title="orchestrator")
-registry = WorkerRegistry(ttl_seconds=45)
 
 @app.post("/workers/register")
 def register(req: RegisterRequest):
@@ -25,3 +26,9 @@ def heartbeat(req: HeartbeatRequest):
 def list_workers():
     active = registry.list_active()
     return {"active": [asdict(w) for w in active]}
+
+
+@app.post("/query", response_model=ExternalQueryResponse)
+def query(req: ExternalQueryRequest) -> ExternalQueryResponse:
+    routed = route_external_query(req.path, req.query)
+    return ExternalQueryResponse(**routed)

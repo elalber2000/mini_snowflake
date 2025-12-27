@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from .client import registration_and_heartbeat_loop
 from .config import load_config
+from .api import router
 
 
 @asynccontextmanager
@@ -28,10 +29,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(
-    title="Worker (subscription + heartbeat)",
-    lifespan=lifespan,
-)
+app = FastAPI(title="Worker", lifespan=lifespan)
+app.include_router(router)
 
 @app.get("/health")
 def health():

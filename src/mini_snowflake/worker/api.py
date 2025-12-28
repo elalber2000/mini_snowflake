@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from mini_snowflake.common.utils import setup_logging
 
 from .models import DropRequest, InsertRequest, SelectRequest, TaskResponse, CreateRequest
-from mini_snowflake.worker.worker import worker_create, worker_drop, worker_insert
+from mini_snowflake.worker.worker import worker_create, worker_drop, worker_insert, worker_select
 
 from mini_snowflake.common.db_conn import DBConn
 import logging
@@ -33,6 +33,8 @@ def execute_task(task: CreateRequest | DropRequest | InsertRequest | SelectReque
             result = worker_drop(conn, task)
         if isinstance(task, InsertRequest):
             result = worker_insert(conn, task)
+        if isinstance(task, SelectRequest):
+            result = worker_select(conn, task)
 
         if result is not None:
             return TaskResponse(ok=True, result=result)

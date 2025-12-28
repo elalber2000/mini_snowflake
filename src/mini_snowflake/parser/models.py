@@ -15,13 +15,13 @@ NullCondStr = ("is_null", "is_not_null")
 NullCond = Literal["is_null", "is_not_null"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class ColumnRef:
     name: str
     alias: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class AggExpr:
     func: AggFunc
     col: str | None

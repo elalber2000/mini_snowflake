@@ -1,0 +1,21 @@
+id,name,age,country,department,salary
+1,Alice Smith,30,USA,Engineering,95000
+2,Bob Johnson,25,Canada,Marketing,62000
+3,Charlie Brown,35,UK,Finance,88000
+4,Diana Evans,42,USA,HR,72000
+5,Ethan Wright,29,USA,Engineering,91000
+6,Fiona Clark,33,Australia,Design,79000
+7,George Miller,38,Germany,Engineering,98000
+8,Hannah Lee,27,South Korea,Marketing,64000
+9,Ian Thompson,45,UK,Management,120000
+10,Julia Martinez,31,Spain,Engineering,87000
+11,Kevin Nguyen,26,Vietnam,Support,54000
+12,Laura Rossi,39,Italy,Finance,93000
+13,Michael Chen,34,China,Engineering,96000
+14,Nina Patel,28,India,Design,68000
+15,Oscar Garcia,41,Mexico,Operations,85000
+16,Paula Andersen,36,Denmark,HR,76000
+17,Quentin Dubois,32,France,Marketing,70000
+18,Rachel Cohen,44,Israel,Management,115000
+19,Samuel Okafor,29,Nigeria,Engineering,83000
+20,Tina Kowalski,37,Poland,Finance,90000

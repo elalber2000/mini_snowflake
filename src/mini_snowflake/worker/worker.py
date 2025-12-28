@@ -1,7 +1,8 @@
+from functools import lru_cache
 from pathlib import Path
 import re
 import shutil
-
+import duckdb
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as ds
@@ -9,7 +10,7 @@ from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import ColumnInfo, Manifest
 from mini_snowflake.common.utils import MSF_PATH, setup_logging
 from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery, SelectQuery
-from .models import CreateRequest, DropRequest, InsertRequest
+from .models import CreateRequest, DropRequest, InsertRequest, SelectRequest
 import logging
 
 setup_logging()
@@ -143,6 +144,20 @@ def worker_insert(
 
     # Output
     return f"Successfully inserted data into table '{table}'"
+
+
+@lru_cache(maxsize=1)
+def _get_duckdb_conn() -> duckdb.DuckDBPyConnection:
+    return duckdb.connect(":memory:")
+
+def worker_select(
+    conn: DBConn,
+    request: SelectRequest,
+) -> str:
+    logger.info(f"worker_select({request})")
+    con = _get_duckdb_conn()
+    con.execute(request.raw_query)
+    return f"Successfully executed query {' '.join(request.raw_query.split())}"
 
 
 if __name__ == "__main__":

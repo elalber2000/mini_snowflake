@@ -22,9 +22,7 @@ class InsertRequest(BaseModel):
 
 class SelectRequest(BaseModel):
     db_path: str
-    table: str
     raw_query: str
-    parquet_dest: str
 
 
 class TaskResponse(BaseModel):

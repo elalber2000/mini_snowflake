@@ -30,5 +30,4 @@ def list_workers():
 
 @app.post("/query", response_model=ExternalQueryResponse)
 def query(req: ExternalQueryRequest) -> ExternalQueryResponse:
-    routed = route_external_query(req.path, req.query)
-    return ExternalQueryResponse(**routed)
+    return route_external_query(req.path, req.query)

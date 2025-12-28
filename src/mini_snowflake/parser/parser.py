@@ -31,7 +31,6 @@ def preprocess_query(query: str) -> str:
         .replace(",", " , ")
         .replace("(", " ( ")
         .replace(")", " ) ")
-        .replace(";", " ; ")
         .replace("is null", "is_null")
         .replace("is not null", "is_not_null")
         .replace("if not exists", "if_not_exists")
@@ -140,8 +139,14 @@ def parse_create_col(toks: list[str]) -> ColumnInfo:
 def parse_select(toks: list[str]) -> SelectQuery:
     select_rows = parse_select_cols(toks[: toks.index("from")])
     table_name = toks[toks.index("from") + 1]
-    where_rows = parse_where(toks[toks.index("where") + 1 : toks.index("group_by")])
-    groupby_tables = parse_groupby(toks[toks.index("group_by") + 1 : toks.index(";")])
+    if "where" in toks:
+        where_rows = parse_where(toks[toks.index("where") + 1 : toks.index("group_by")])
+    else:
+        where_rows = None
+    if "group_by" in toks:
+        groupby_tables = parse_groupby(toks[toks.index("group_by") + 1 : -1])
+    else:
+        groupby_tables = None
 
     return SelectQuery(
         table=table_name,
@@ -269,7 +274,7 @@ if __name__ == "__main__":
             AND event_time <  '2025-02-01T00:00:00Z'
             AND value >= 0
             AND user_id IS NOT NULL
-        group by event_type;
+        group by event_type
     """
 
     select_query_class = SelectQuery(

@@ -26,21 +26,3 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 def _curr_date() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
-
-
-def _validate_types(spec: tuple[tuple[object, type], ...]) -> None:
-    """
-    Validate that each value matches its expected type.
-
-    Example:
-        validate_types((
-            ("asd", str),
-            (123, int),
-        ))
-    """
-    for value, expected_type in spec:
-        if not isinstance(value, expected_type):
-            raise TypeError(
-                f"Expected type {expected_type.__name__}, "
-                f"got {type(value).__name__} ({value!r})"
-            )

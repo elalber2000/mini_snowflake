@@ -16,6 +16,55 @@ import logging
 setup_logging()
 logger = logging.getLogger("")
 
+DUCKDB_TO_ARROW: dict[str, pa.DataType] = {
+    # integers
+    "tinyint": pa.int8(),
+    "smallint": pa.int16(),
+    "integer": pa.int32(),
+    "int": pa.int32(),
+    "bigint": pa.int64(),
+    "hugeint": pa.int128(),
+    "bignum": pa.decimal128(38, 0),
+
+    "utinyint": pa.uint8(),
+    "usmallint": pa.uint16(),
+    "uinteger": pa.uint32(),
+    "ubigint": pa.uint64(),
+    "uhugeint": pa.uint64(),
+
+    # floats / decimals
+    "float": pa.float32(),
+    "real": pa.float32(),
+    "double": pa.float64(),
+    "decimal": pa.decimal128(38, 10),  # if you don't store precision/scale, pick a default
+    "numeric": pa.decimal128(38, 10),
+
+    # boolean
+    "boolean": pa.bool_(),
+    "bool": pa.bool_(),
+
+    # strings
+    "varchar": pa.string(),
+    "text": pa.string(),
+    "string": pa.string(),
+    "char": pa.string(),
+    "uuid": pa.string(),
+    "bit": pa.string(),
+
+    # binary
+    "blob": pa.binary(),
+    "bytea": pa.binary(),
+    "varbinary": pa.binary(),
+
+    # temporal
+    "date": pa.date32(),
+    "time": pa.time64("us"),
+    "timestamp": pa.timestamp("us"),
+    "timestamptz": pa.timestamp("us", tz="UTC"),
+    "interval": pa.duration("us"),
+}
+
+
 def worker_create(
     conn: DBConn,
     request: CreateRequest,
@@ -39,7 +88,6 @@ def worker_create(
         table_name=table,
         schema=schema,
     )
-    manifest.save(manifest_path)
 
     logger.info("Update/Create catalog")
     conn.catalog.create_table(
@@ -48,6 +96,7 @@ def worker_create(
     )
 
     logger.info("Save catalog and manifest")
+    manifest.save(manifest_path)
     conn.catalog.save(conn.catalog_path)
 
     return f"Successfully created table '{table}'"
@@ -82,6 +131,45 @@ def _get_shard_i(path: str) -> int:
     match = re.search(r"shard-([^.]+)\.parquet", path)
     return int(match.group(1)) if match else 0
 
+def _validate_insert_table(tb: pa.Table, manifest: Manifest) -> pa.Table:
+    """
+    Validates:
+      - all manifest columns exist in the incoming table
+      - nullability constraints (nullable=False)
+      - cocast columns to target Arrow types
+    Returns a casted table (so downstream parquet files have canonical types).
+    """
+    expected = {c.name: c for c in manifest.schema}
+    incoming_names = set(tb.schema.names)
+
+    missing = [name for name in expected.keys() if name not in incoming_names]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    # Forbid extras
+    extras = [name for name in tb.schema.names if name not in expected]
+    if extras:
+        raise ValueError(f"Unexpected columns: {extras}")
+
+    tb = tb.select([c.name for c in manifest.schema])
+
+    # Nullability + castability
+    cast_arrays = []
+    for col in manifest.schema:
+        arr = tb[col.name]
+        if not col.nullable:
+            if arr.null_count > 0:
+                raise ValueError(f"Column '{col.name}' is NOT NULL but has {arr.null_count} nulls")
+
+        target_type = DUCKDB_TO_ARROW[str(col.type)]
+        try:
+            cast_arrays.append(pa.compute.cast(arr, target_type, safe=True))
+        except Exception as e:
+            raise TypeError(
+                f"Column '{col.name}' cannot be safely cast from {arr.type} to {target_type}"
+            ) from e
+
+    return pa.table(cast_arrays, names=[c.name for c in manifest.schema])
 
 def worker_insert(
     conn: DBConn,
@@ -121,6 +209,7 @@ def worker_insert(
 
     # Convert to Arrow
     tb = pa.Table.from_pandas(df, preserve_index=False)
+    tb = _validate_insert_table(tb, manifest)
 
     # Write shards
     ds.write_dataset(

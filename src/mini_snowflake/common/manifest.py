@@ -3,21 +3,46 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Final, Literal
+from typing import Any, Literal
 
+from mini_snowflake.common.utils import _atomic_write_text, _curr_date
 from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
-from mini_snowflake.common.utils import _atomic_write_text, _curr_date
-
 ColType = Literal[
-    'tinyint', 'smallint', 'integer', 'int', 'bigint',
-    'hugeint', 'bignum', 'utinyint', 'usmallint', 'uinteger',
-    'ubigint', 'uhugeint', 'float', 'real', 'double',
-    'decimal', 'numeric', 'boolean', 'bool', 'varchar', 'text',
-    'string', 'char', 'uuid', 'bit', 'blob', 'bytea',
-    'varbinary', 'date', 'time', 'timestamp', 'timestamptz',
-    'interval'
+    "tinyint",
+    "smallint",
+    "integer",
+    "int",
+    "bigint",
+    "hugeint",
+    "bignum",
+    "utinyint",
+    "usmallint",
+    "uinteger",
+    "ubigint",
+    "uhugeint",
+    "float",
+    "real",
+    "double",
+    "decimal",
+    "numeric",
+    "boolean",
+    "bool",
+    "varchar",
+    "text",
+    "string",
+    "char",
+    "uuid",
+    "bit",
+    "blob",
+    "bytea",
+    "varbinary",
+    "date",
+    "time",
+    "timestamp",
+    "timestamptz",
+    "interval",
 ]
 
 
@@ -28,7 +53,7 @@ class ColumnInfo:
     nullable: bool = True
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "ColumnInfo":
+    def from_dict(cls, d: dict[str, Any]) -> ColumnInfo:
         return cls(**d)
 
     def to_dict(self) -> dict[str, Any]:
@@ -57,7 +82,7 @@ class Manifest:
         }
 
     @classmethod
-    def load(cls, manifest_path: str | Path) -> "Manifest":
+    def load(cls, manifest_path: str | Path) -> Manifest:
         manifest_path = Path(manifest_path)
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
 
@@ -68,6 +93,9 @@ class Manifest:
 
     def save(self, manifest_path: str | Path) -> Path:
         manifest_path = Path(manifest_path)
-        text = json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        text = (
+            json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n"
+        )
         _atomic_write_text(manifest_path, text)
         return manifest_path

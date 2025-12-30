@@ -1,14 +1,24 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
-
-from mini_snowflake.common.utils import setup_logging
-
-from .models import DropRequest, InsertRequest, SelectRequest, TaskResponse, CreateRequest
-from mini_snowflake.worker.worker import worker_create, worker_drop, worker_insert, worker_select
-
-from mini_snowflake.common.db_conn import DBConn
 import logging
+
+from fastapi import APIRouter
+from mini_snowflake.common.db_conn import DBConn
+from mini_snowflake.common.utils import setup_logging
+from mini_snowflake.worker.worker import (
+    worker_create,
+    worker_drop,
+    worker_insert,
+    worker_select,
+)
+
+from .models import (
+    CreateRequest,
+    DropRequest,
+    InsertRequest,
+    SelectRequest,
+    TaskResponse,
+)
 
 setup_logging()
 logger = logging.getLogger("")
@@ -17,7 +27,9 @@ router = APIRouter()
 
 
 @router.post("/tasks/execute", response_model=TaskResponse)
-def execute_task(task: CreateRequest | DropRequest | InsertRequest | SelectRequest) -> TaskResponse:
+def execute_task(
+    task: CreateRequest | DropRequest | InsertRequest | SelectRequest,
+) -> TaskResponse:
     """
     Single internal endpoint for all tasks.
     For now only CreateQuery is wired.
@@ -39,7 +51,9 @@ def execute_task(task: CreateRequest | DropRequest | InsertRequest | SelectReque
         if result is not None:
             return TaskResponse(ok=True, result=result)
 
-        return TaskResponse(ok=False, error=f"Unsupported task type: {type(task).__name__}")
+        return TaskResponse(
+            ok=False, error=f"Unsupported task type: {type(task).__name__}"
+        )
 
     except Exception as e:
         logger.exception("Failed task")

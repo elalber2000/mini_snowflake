@@ -1,10 +1,11 @@
+import logging
 import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
-import logging
-import sys
 
 MSF_PATH = Path(__file__).resolve().parents[1]
+
 
 def setup_logging() -> None:
     level_name = os.getenv("LOG_LEVEL", "INFO").upper()

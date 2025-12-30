@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
+
 import requests
-from typing import Optional
 
 from .config import WorkerConfig
 
@@ -14,7 +14,9 @@ def register_once_with_retries(cfg: WorkerConfig) -> None:
 
     while True:
         try:
-            r = requests.post(f"{cfg.orchestrator_url}/workers/register", json=payload, timeout=5)
+            r = requests.post(
+                f"{cfg.orchestrator_url}/workers/register", json=payload, timeout=5
+            )
             if r.status_code < 400:
                 return
         except Exception:
@@ -27,7 +29,9 @@ def heartbeat_forever(cfg: WorkerConfig) -> None:
         payload = {"worker_id": cfg.worker_id, "load": 0.0}
 
         try:
-            r = requests.post(f"{cfg.orchestrator_url}/workers/heartbeat", json=payload, timeout=5)
+            r = requests.post(
+                f"{cfg.orchestrator_url}/workers/heartbeat", json=payload, timeout=5
+            )
 
             if r.status_code == 404:
                 register_once_with_retries(cfg)

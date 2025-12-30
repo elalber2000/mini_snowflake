@@ -1,11 +1,18 @@
+from dataclasses import asdict
+
 from fastapi import FastAPI, HTTPException
 from mini_snowflake.orquestrator.orquestrator import route_external_query
-from .models import ExternalQueryRequest, ExternalQueryResponse, HeartbeatRequest, RegisterRequest
-from dataclasses import asdict
+
+from .models import (
+    ExternalQueryRequest,
+    ExternalQueryResponse,
+    HeartbeatRequest,
+    RegisterRequest,
+)
 from .worker_registry import registry
 
-
 app = FastAPI(title="orchestrator")
+
 
 @app.post("/workers/register")
 def register(req: RegisterRequest):
@@ -16,9 +23,14 @@ def register(req: RegisterRequest):
 @app.post("/workers/heartbeat")
 def heartbeat(req: HeartbeatRequest):
     try:
-        registry.heartbeat(req.worker_id, str(req.base_url) if req.base_url else None, req.load)
+        registry.heartbeat(
+            req.worker_id, str(req.base_url) if req.base_url else None, req.load
+        )
     except KeyError:
-        raise HTTPException(status_code=404, detail="worker not registered")
+        raise HTTPException(
+            status_code=404,
+            detail="worker not registered",
+        ) from None
     return {"ok": True}
 
 

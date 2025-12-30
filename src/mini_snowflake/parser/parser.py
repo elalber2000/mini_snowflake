@@ -1,7 +1,7 @@
 import re
 from typing import cast
 
-from mini_snowflake.common.manifest import ColumnInfo
+from mini_snowflake.common.manifest import ColType, ColumnInfo
 from mini_snowflake.parser.models import (
     AggExpr,
     AggFunc,
@@ -73,14 +73,12 @@ def parse_insert(toks: list[str]) -> InsertQuery:
         src_path = toks[3]
         if len(toks) == 4:
             return InsertQuery(table=table, src_path=src_path)
-        elif len(toks)==6:
+        elif len(toks) == 6:
             assert toks[4] == "rows_per_shard"
             return InsertQuery(
-                table=table,
-                src_path=src_path,
-                rows_per_shard=num_cast(toks[5])
+                table=table, src_path=src_path, rows_per_shard=int(toks[5])
             )
-        raise TypeError(f"Tokenization Error")
+        raise TypeError("Tokenization Error")
     except Exception as e:
         raise TypeError(f"Error parsing '{' '.join(toks)}': {e}") from e
 
@@ -121,13 +119,13 @@ def parse_create_col(toks: list[str]) -> ColumnInfo:
         if len(toks) == 2:
             return ColumnInfo(
                 name=toks[0],
-                type=toks[1],
+                type=cast(ColType, toks[1]),
             )
         elif len(toks) == 3:
             assert toks[2] == "is_not_null"
             return ColumnInfo(
                 name=toks[0],
-                type=toks[1],
+                type=cast(ColType, toks[1]),
                 nullable=False,
             )
         else:
@@ -209,16 +207,16 @@ def parse_where(toks: list[str]):
             expr.append(tok)
     return res
 
+
 def num_cast(val: str) -> int | float | str:
     if val.isdigit():
-        num_val = int(val)
+        return int(val)
     elif val.count(".") == 1 and val.replace(".", "").isdigit():
-        num_val = float(val)
+        return float(val)
     elif val.startswith("'") and val.endswith("'"):
-        num_val = val[1:-1]
-    else:
-        raise ValueError(f"Cannot parse expresion {val}")
-    return num_val
+        return val[1:-1]
+    raise ValueError(f"Cannot parse expresion {val}")
+
 
 def parse_where_expr(toks: list[str]):
     try:
@@ -345,9 +343,7 @@ if __name__ == "__main__":
 
     insert_query_str = "INSERT INTO events FROM data/path ROWS_PER_SHARD 2"
     insert_query_class = InsertQuery(
-        table="events",
-        src_path="data/path",
-        rows_per_shard=2
+        table="events", src_path="data/path", rows_per_shard=2
     )
 
     print(parse(create_query_str) == create_query_class)

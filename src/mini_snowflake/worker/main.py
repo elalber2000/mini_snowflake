@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import threading
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
+from .api import router
 from .client import registration_and_heartbeat_loop
 from .config import load_config
-from .api import router
 
 
 @asynccontextmanager
@@ -31,6 +32,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Worker", lifespan=lifespan)
 app.include_router(router)
+
 
 @app.get("/health")
 def health():

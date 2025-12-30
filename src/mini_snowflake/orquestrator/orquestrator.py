@@ -1,26 +1,43 @@
+import logging
 import math
-from pathlib import Path
 import shutil
+from pathlib import Path
 from time import monotonic, sleep
 from typing import Any
+
 from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import Manifest
 from mini_snowflake.common.utils import setup_logging
-from mini_snowflake.orquestrator.models import ExternalQueryResponse
-from mini_snowflake.orquestrator.query_maker import create_final_reduce_job, create_intermediate_reduce_job, create_map_job
-from mini_snowflake.worker.models import CreateRequest, DropRequest, InsertRequest, SelectRequest
+from mini_snowflake.orquestrator.models import ExternalQueryResponse, KindType
+from mini_snowflake.orquestrator.query_maker import (
+    create_final_reduce_job,
+    create_intermediate_reduce_job,
+    create_map_job,
+)
+from mini_snowflake.parser.models import (
+    CreateQuery,
+    DropQuery,
+    InsertQuery,
+    SelectQuery,
+)
+from mini_snowflake.parser.parser import parse
+from mini_snowflake.worker.models import (
+    CreateRequest,
+    DropRequest,
+    InsertRequest,
+    SelectRequest,
+)
+
 from .client import send_task
 from .worker_registry import registry
-from mini_snowflake.parser.models import AggExpr, ColumnRef, CreateQuery, DropQuery, InsertQuery, PredicateTerm, SelectQuery
-from mini_snowflake.parser.parser import parse
-import logging
 
 setup_logging()
 logger = logging.getLogger("")
 
+
 def orchestrate_create(query: CreateQuery, conn: DBConn) -> ExternalQueryResponse:
     logger.info("Create request")
-    kind = "select"
+    kind: KindType = "select"
     workers = registry.list_active()
     if not workers:
         return ExternalQueryResponse(
@@ -48,9 +65,10 @@ def orchestrate_create(query: CreateQuery, conn: DBConn) -> ExternalQueryRespons
         error=resp.error,
     )
 
+
 def orchestrate_drop(query: DropQuery, conn: DBConn) -> ExternalQueryResponse:
     logger.info("Drop request")
-    kind = "drop"
+    kind: KindType = "drop"
     workers = registry.list_active()
     if not workers:
         return ExternalQueryResponse(
@@ -77,9 +95,10 @@ def orchestrate_drop(query: DropQuery, conn: DBConn) -> ExternalQueryResponse:
         error=resp.error,
     )
 
+
 def orchestrate_insert(query: InsertQuery, conn: DBConn) -> ExternalQueryResponse:
     logger.info("Insert request")
-    kind = "insert"
+    kind: KindType = "insert"
     workers = registry.list_active()
     if not workers:
         return ExternalQueryResponse(
@@ -112,11 +131,12 @@ def _get_fanout(
     num_rows_per_shard: int,
     R_target: int = 16_000_000,
     k_min: int = 2,
-    k_max: int = 256
+    k_max: int = 256,
 ) -> int:
     ratio = R_target / max(1, num_rows_per_shard)
-    k = 1 if ratio<=1 else 1<< int(round(math.log2(ratio)))
+    k = 1 if ratio <= 1 else 1 << int(round(math.log2(ratio)))
     return max(k_min, min(k, k_max))
+
 
 def _planner(
     query: SelectQuery,
@@ -146,7 +166,6 @@ def _planner(
         current_paths.append(tmp_out_path)
 
     plan_levels.append(map_sqls)
-    
 
     level = 0
     while len(current_paths) > fanout:
@@ -154,7 +173,7 @@ def _planner(
         next_paths: list[Path] = []
 
         for i in range(0, len(current_paths), fanout):
-            chunk = current_paths[i:i + fanout]
+            chunk = current_paths[i : i + fanout]
             sql, tmp_out_path = create_intermediate_reduce_job(
                 q=query,
                 map_outputs=chunk,
@@ -166,7 +185,7 @@ def _planner(
             next_paths.append(tmp_out_path)
 
         plan_levels.append(next_sqls)
-        
+
         current_paths = next_paths
         level += 1
 
@@ -175,12 +194,13 @@ def _planner(
         inputs=current_paths,
         out_path=Path(out_path),
         fmt="parquet",
-        inputs_level="interm" if len(current_paths) > fanout else "map"
+        inputs_level="interm" if len(current_paths) > fanout else "map",
     )
     plan_levels.append([final_sql])
     logger.info(f"plan_levels: {plan_levels}")
 
     return plan_levels
+
 
 def _get_first_worker_blocking(
     wait_start: float,
@@ -197,13 +217,14 @@ def _get_first_worker_blocking(
         if wait_timeout_s is not None and (monotonic() - wait_start) > wait_timeout_s:
             raise TimeoutError("No active workers became available before timeout")
 
+
 def orchestrate_select(
     query: SelectQuery,
     conn: DBConn,
     wait_timeout_s: float | None = 60.0,
 ) -> ExternalQueryResponse:
     logger.info("Select request")
-    kind = "select"
+    kind: KindType = "select"
 
     tmp_path = conn.path / "tmp"
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -247,11 +268,7 @@ def orchestrate_select(
                     raw_query=sql,
                 )
 
-                resp = send_task(
-                    worker.base_url,
-                    task,
-                    "select"
-                )
+                resp = send_task(worker.base_url, task, "select")
                 rec = {
                     "job": job_i,
                     "level": level_i,
@@ -281,11 +298,11 @@ def orchestrate_select(
         return ExternalQueryResponse(
             ok=False,
             kind=kind,
-            error=f"{str(e)}\nExecutions: {executions}",
+            error=f"{e!s}\nExecutions: {executions}",
         )
-    
+
     shutil.rmtree(tmp_path)
-    
+
     return ExternalQueryResponse(
         ok=resp.ok,
         kind=kind,
@@ -301,6 +318,7 @@ def route_external_query(path: str, raw_query: str) -> ExternalQueryResponse:
     conn = DBConn(path)
     query = parse(raw_query)
     out = None
+    kind: KindType = "unknown"
 
     if isinstance(query, CreateQuery):
         out = orchestrate_create(query, conn)
@@ -310,9 +328,13 @@ def route_external_query(path: str, raw_query: str) -> ExternalQueryResponse:
         out = orchestrate_insert(query, conn)
     if isinstance(query, SelectQuery):
         out = orchestrate_select(query, conn)
-    
+
     if out is not None:
         return out
 
     # Not implemented yet
-    return {"ok": False, "kind": "unknown", "error": f"Unsupported query type: {type(query).__name__}"}
+    return ExternalQueryResponse(
+        ok=False,
+        kind=kind,
+        error=f"Unsupported query type: {type(query).__name__}",
+    )

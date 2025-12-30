@@ -1,7 +1,9 @@
+from typing import Any, Literal
+
 from pydantic import AnyHttpUrl, BaseModel, Field
-from typing import Literal, Any
 
 KindType = Literal["create", "drop", "insert", "select", "unknown"]
+
 
 class RegisterRequest(BaseModel):
     worker_id: str
@@ -13,7 +15,6 @@ class HeartbeatRequest(BaseModel):
     worker_id: str
     base_url: AnyHttpUrl | None = None
     load: float | None = None
-
 
 
 # user -> orchestrator

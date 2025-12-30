@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Iterable, Literal, Sequence
+from typing import Literal
 
 from mini_snowflake.common.utils import setup_logging
 from mini_snowflake.parser.models import AggExpr, ColumnRef, PredicateTerm, SelectQuery
-import logging
 
 setup_logging()
 logger = logging.getLogger("")
@@ -13,8 +14,12 @@ logger = logging.getLogger("")
 InputsLevelLiteral = Literal["interm", "map"]
 
 
-def _safe_ident(x: str) -> str:
-    return x.replace("*", "star").replace(".", "_").replace("-", "_")
+def _safe_ident(x: str | None) -> str:
+    if x is None:
+        return ""
+    else:
+        return x.replace("*", "star").replace(".", "_").replace("-", "_")
+
 
 def _unparse_where_clause(clause: PredicateTerm) -> str:
     op = clause.op.replace("_", " ").lower()
@@ -31,6 +36,7 @@ def _unparse_where_clause(clause: PredicateTerm) -> str:
 
     return f"{clause.col} {op} {val}"
 
+
 def _group_cols(q: SelectQuery) -> list[str]:
     if q.group_by is not None:
         return list(q.group_by)
@@ -46,19 +52,27 @@ def _iter_aggs(q: SelectQuery) -> Iterable[AggExpr]:
         if isinstance(s, AggExpr):
             yield s
 
-def _has_sum_for_col(q: SelectQuery, col: str) -> AggExpr | None:
+
+def _has_sum_for_col(q: SelectQuery, col: str | None) -> AggExpr | None:
+    if col is None:
+        col = ""
     for a in _iter_aggs(q):
         if a.func.lower() == "sum" and a.col == col:
             return a
     return None
 
+
 def _sql_union_all_select_star(sources: Sequence[str | Path]) -> str:
     return " UNION ALL ".join(f"SELECT * FROM { _sql_source(src) }" for src in sources)
 
+
 def _sql_source(src: str | Path) -> str:
-    if isinstance(src, Path) or (isinstance(src, str) and ("/" in src or src.endswith((".parquet", ".csv")))):
+    if isinstance(src, Path) or (
+        isinstance(src, str) and ("/" in src or src.endswith((".parquet", ".csv")))
+    ):
         return f"'{src}'"
     return str(src)
+
 
 def _materialize(select_sql: str, out_path: str | Path, fmt: str = "parquet") -> str:
     """
@@ -67,7 +81,10 @@ def _materialize(select_sql: str, out_path: str | Path, fmt: str = "parquet") ->
     query = f"COPY ({select_sql}) TO '{out_path}' (FORMAT {fmt.upper()});"
     return " ".join(query.split())
 
-def _map_alias(func: str, col: str) -> str:
+
+def _map_alias(func: str, col: str | None) -> str:
+    if col is None:
+        col = ""
     func = func.lower()
     col_id = _safe_ident(col)
     if func == "count":
@@ -80,6 +97,7 @@ def _map_alias(func: str, col: str) -> str:
         return f"max_{col_id}"
     raise ValueError(f"Unsupported aggregate func: {func!r}")
 
+
 def _merge_func(func: str) -> str:
     func = func.lower()
     if func in {"count", "sum"}:
@@ -87,6 +105,7 @@ def _merge_func(func: str) -> str:
     if func in {"min", "max"}:
         return func
     raise ValueError(f"Unsupported aggregate func: {func!r}")
+
 
 def _required_map_measures(q: SelectQuery) -> list[tuple[str, str]]:
     """
@@ -100,17 +119,18 @@ def _required_map_measures(q: SelectQuery) -> list[tuple[str, str]]:
         f = agg.func.lower()
         if f == "avg":
             for mf in ("sum", "count"):
-                key = (mf, agg.col)
+                key = (mf, agg.col if agg.col is not None else "")
                 if key not in seen:
                     seen.add(key)
                     out.append(key)
         else:
-            key = (f, agg.col)
+            key = (f, agg.col if agg.col is not None else "")
             if key not in seen:
                 seen.add(key)
                 out.append(key)
 
     return out
+
 
 def _has_avg_for_col(q: SelectQuery, col: str) -> AggExpr | None:
     for a in _iter_aggs(q):
@@ -160,17 +180,19 @@ def create_map_job(
     data_path: str | Path,
     tmp_dir: str | Path,
     fmt: str = "parquet",
-) -> str:
+) -> tuple[str, Path]:
     """
     Returns (sql_to_execute, output_path).
     """
 
-    out_path = tmp_dir / f"map__{q.table}__{_safe_ident(shard_name)}.{fmt}"
+    out_path = Path(tmp_dir) / f"map__{q.table}__{_safe_ident(shard_name)}.{fmt}"
     select_sql = create_map_select(q, shard_name, data_path)
     return _materialize(select_sql, out_path, fmt=fmt), out_path
 
 
-def create_intermediate_reduce_select(q: SelectQuery, map_outputs: Sequence[str | Path]) -> str:
+def create_intermediate_reduce_select(
+    q: SelectQuery, map_outputs: Sequence[str | Path]
+) -> str:
     group = _group_cols(q)
 
     union_sql = _sql_union_all_select_star(map_outputs)
@@ -319,7 +341,9 @@ def create_final_reduce_select(
 
             if func == "count":
                 out_col = item.alias or f"count_{_safe_ident(item.col)}"
-                final_select.append(f"sum({_map_alias('count', item.col)}) AS {out_col}")
+                final_select.append(
+                    f"sum({_map_alias('count', item.col)}) AS {out_col}"
+                )
                 continue
 
             if func == "min":
@@ -339,7 +363,9 @@ def create_final_reduce_select(
 
             sum_agg = _has_sum_for_col(q, item.col)
             if sum_agg is not None:
-                sum_partial_col = f"{(sum_agg.alias or f'sum_{_safe_ident(sum_agg.col)}')}_partial"
+                sum_partial_col = (
+                    f"{(sum_agg.alias or f'sum_{_safe_ident(sum_agg.col)}')}_partial"
+                )
             else:
                 sum_partial_col = f"{avg_alias}_sum_partial"
 
@@ -355,7 +381,11 @@ def create_final_reduce_select(
             final_select.append(f"sum(count_star_partial) AS {out_col}")
             continue
 
-        in_col = f"{item.alias}_partial" if item.alias else f"{func}_{_safe_ident(item.col)}_partial"
+        in_col = (
+            f"{item.alias}_partial"
+            if item.alias
+            else f"{func}_{_safe_ident(item.col)}_partial"
+        )
         out_col = item.alias or f"{func}_{_safe_ident(item.col)}"
         merge = _merge_func(func)
         final_select.append(f"{merge}({in_col}) AS {out_col}")
@@ -390,18 +420,17 @@ def create_final_reduce_job(
     return _materialize(select_sql, out_path, fmt=fmt), Path(out_path)
 
 
-
-if __name__=="__main__":
+if __name__ == "__main__":
     query = SelectQuery(
         table="events",
         select=[
             ColumnRef(name="country"),
-            #AggExpr(func="count", col="*"),
-            #AggExpr(func="count", col="user_id", alias="n_user_id_nonnull"),
-            #AggExpr(func="sum", col="value", alias="total_value"),
-            #AggExpr(func="avg", col="value", alias="avg_value"),
-            #AggExpr(func="min", col="event_time", alias="first_seen"),
-            #AggExpr(func="max", col="event_time", alias="last_seen"),
+            # AggExpr(func="count", col="*"),
+            # AggExpr(func="count", col="user_id", alias="n_user_id_nonnull"),
+            # AggExpr(func="sum", col="value", alias="total_value"),
+            # AggExpr(func="avg", col="value", alias="avg_value"),
+            # AggExpr(func="min", col="event_time", alias="first_seen"),
+            # AggExpr(func="max", col="event_time", alias="last_seen"),
         ],
         where=[
             PredicateTerm(
@@ -425,13 +454,12 @@ if __name__=="__main__":
                 value=None,
             ),
         ],
-        group_by=None#["event_type"],
+        group_by=None,  # ["event_type"],
     )
 
     shards = ["shard-0", "shard-1", "shard-2"]
     data_path = "src/data"
     tmp_dir = f"{data_path}/tmp"
-
 
     map_jobs: list[tuple[str, Path]] = []
     for s in shards:

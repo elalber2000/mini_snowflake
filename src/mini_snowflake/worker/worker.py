@@ -1,17 +1,18 @@
-from functools import lru_cache
-from pathlib import Path
+import logging
 import re
 import shutil
+from functools import lru_cache
+from pathlib import Path
+
 import duckdb
 import pandas as pd
 import pyarrow as pa
 import pyarrow.dataset as ds
 from mini_snowflake.common.db_conn import DBConn
-from mini_snowflake.common.manifest import ColumnInfo, Manifest
-from mini_snowflake.common.utils import MSF_PATH, setup_logging
-from mini_snowflake.parser.models import CreateQuery, DropQuery, InsertQuery, SelectQuery
+from mini_snowflake.common.manifest import Manifest
+from mini_snowflake.common.utils import setup_logging
+
 from .models import CreateRequest, DropRequest, InsertRequest, SelectRequest
-import logging
 
 setup_logging()
 logger = logging.getLogger("")
@@ -23,26 +24,24 @@ DUCKDB_TO_ARROW: dict[str, pa.DataType] = {
     "integer": pa.int32(),
     "int": pa.int32(),
     "bigint": pa.int64(),
-    "hugeint": pa.int128(),
+    "hugeint": pa.int64(),
     "bignum": pa.decimal128(38, 0),
-
     "utinyint": pa.uint8(),
     "usmallint": pa.uint16(),
     "uinteger": pa.uint32(),
     "ubigint": pa.uint64(),
     "uhugeint": pa.uint64(),
-
     # floats / decimals
     "float": pa.float32(),
     "real": pa.float32(),
     "double": pa.float64(),
-    "decimal": pa.decimal128(38, 10),  # if you don't store precision/scale, pick a default
+    "decimal": pa.decimal128(
+        38, 10
+    ),  # if you don't store precision/scale, pick a default
     "numeric": pa.decimal128(38, 10),
-
     # boolean
     "boolean": pa.bool_(),
     "bool": pa.bool_(),
-
     # strings
     "varchar": pa.string(),
     "text": pa.string(),
@@ -50,12 +49,10 @@ DUCKDB_TO_ARROW: dict[str, pa.DataType] = {
     "char": pa.string(),
     "uuid": pa.string(),
     "bit": pa.string(),
-
     # binary
     "blob": pa.binary(),
     "bytea": pa.binary(),
     "varbinary": pa.binary(),
-
     # temporal
     "date": pa.date32(),
     "time": pa.time64("us"),
@@ -72,7 +69,6 @@ def worker_create(
     logger.info(f"worker_create({request})")
     table = request.table
     schema = request.table_schema
-    if_not_exists = request.if_not_exists
 
     if conn.catalog.get_table(table, exist_ok=True) is not None:
         return f"Table {table} already created"
@@ -108,7 +104,7 @@ def worker_drop(
 ):
     logger.info(f"worker_drop({request})")
     table = request.table
-    if_exists = request.if_exists
+    if_exists = request.if_exists if request.if_exists is not None else False
 
     # Update catalog
     conn.catalog.drop_table(
@@ -130,6 +126,7 @@ def worker_drop(
 def _get_shard_i(path: str) -> int:
     match = re.search(r"shard-([^.]+)\.parquet", path)
     return int(match.group(1)) if match else 0
+
 
 def _validate_insert_table(tb: pa.Table, manifest: Manifest) -> pa.Table:
     """
@@ -159,7 +156,9 @@ def _validate_insert_table(tb: pa.Table, manifest: Manifest) -> pa.Table:
         arr = tb[col.name]
         if not col.nullable:
             if arr.null_count > 0:
-                raise ValueError(f"Column '{col.name}' is NOT NULL but has {arr.null_count} nulls")
+                raise ValueError(
+                    f"Column '{col.name}' is NOT NULL but has {arr.null_count} nulls"
+                )
 
         target_type = DUCKDB_TO_ARROW[str(col.type)]
         try:
@@ -171,16 +170,16 @@ def _validate_insert_table(tb: pa.Table, manifest: Manifest) -> pa.Table:
 
     return pa.table(cast_arrays, names=[c.name for c in manifest.schema])
 
+
 def worker_insert(
     conn: DBConn,
     request: InsertRequest,
 ):
     logger.info(f"worker_insert({request})")
     table = request.table
-    src_path = request.src_path
+    src_path = Path(request.src_path)
     rows_per_shard = request.rows_per_shard
 
-    src_path = Path(src_path)
     suffix = src_path.suffix.lower()
     if suffix == ".csv":
         df = pd.read_csv(src_path)
@@ -239,6 +238,7 @@ def worker_insert(
 def _get_duckdb_conn() -> duckdb.DuckDBPyConnection:
     return duckdb.connect(":memory:")
 
+
 def worker_select(
     conn: DBConn,
     request: SelectRequest,
@@ -247,68 +247,3 @@ def worker_select(
     con = _get_duckdb_conn()
     con.execute(request.raw_query)
     return f"Successfully executed query {' '.join(request.raw_query.split())}"
-
-
-if __name__ == "__main__":
-    path = MSF_PATH / "data" / "dummy_db"
-    conn = DBConn(
-        path=path,
-        exist_ok=True,
-    )
-
-    print(
-        worker_drop(
-            conn,
-            DropQuery(
-                table="dummy_table",
-                if_exists=True,
-            ),
-        )
-    )
-
-    print(
-        worker_create(
-            conn,
-            CreateQuery(
-                table="dummy_table",
-                schema=[
-                    ColumnInfo(
-                        name="col1",
-                        type="int",
-                    ),
-                    ColumnInfo(
-                        name="col2",
-                        type="varchar",
-                    ),
-                ],
-            ),
-        )
-    )
-
-    print(
-        worker_insert(
-            conn,
-            InsertQuery(table="dummy_table"),
-            pd.DataFrame(
-                {
-                    "col1": [1, 2],
-                    "col2": ["foo", "bar"],
-                }
-            ),
-            rows_per_shard=3,
-        )
-    )
-
-    print(
-        worker_insert(
-            conn,
-            InsertQuery(table="dummy_table"),
-            pd.DataFrame(
-                {
-                    "col1": [3, 4, 5, 6],
-                    "col2": ["a", "b", "c", "d"],
-                }
-            ),
-            rows_per_shard=3,
-        )
-    )

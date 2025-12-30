@@ -4,10 +4,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from mini_snowflake.common.utils import _atomic_write_text, _curr_date
 from pydantic import ConfigDict, Field, field_validator
 from pydantic.dataclasses import dataclass
-
-from mini_snowflake.common.utils import _atomic_write_text, _curr_date
 
 
 @dataclass(frozen=True, config=ConfigDict(extra="forbid"))
@@ -15,7 +14,7 @@ class TableEntry:
     table_id: str
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "TableEntry":
+    def from_dict(cls, d: dict[str, Any]) -> TableEntry:
         return cls(**d)
 
     def to_dict(self) -> dict[str, Any]:
@@ -43,14 +42,14 @@ class Catalog:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "Catalog":
+    def from_dict(cls, d: dict[str, Any]) -> Catalog:
         raw_tables = dict(d.get("tables", {}))
         d2 = dict(d)
         d2["tables"] = {k: TableEntry.from_dict(v) for k, v in raw_tables.items()}
         return cls(**d2)
 
     @classmethod
-    def load(cls, catalog_path: str | Path) -> "Catalog":
+    def load(cls, catalog_path: str | Path) -> Catalog:
         catalog_path = Path(catalog_path)
         if not catalog_path.exists():
             return cls()
@@ -59,7 +58,10 @@ class Catalog:
 
     def save(self, catalog_path: str | Path) -> Path:
         catalog_path = Path(catalog_path)
-        text = json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        text = (
+            json.dumps(self.to_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+            + "\n"
+        )
         _atomic_write_text(catalog_path, text)
         return catalog_path
 

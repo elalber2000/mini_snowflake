@@ -10,7 +10,7 @@ from .config import WorkerConfig
 
 
 def register_once_with_retries(cfg: WorkerConfig) -> None:
-    payload = {"worker_id": cfg.worker_id, "base_url": cfg.base_url, "load": 0.0}
+    payload = {"worker_id": cfg.worker_id, "load": 0.0}
 
     while True:
         try:

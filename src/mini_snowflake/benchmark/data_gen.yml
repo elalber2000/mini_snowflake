@@ -1,0 +1,4 @@
+rows_per_shard: 100000
+num_shards: 24
+db_path: data/test-db
+create_ddl: CREATE TABLE test_table (id INT, name VARCHAR, age INT, department VARCHAR, salary INT) if not exists

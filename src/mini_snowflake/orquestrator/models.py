@@ -7,13 +7,13 @@ KindType = Literal["create", "drop", "insert", "select", "unknown"]
 
 class RegisterRequest(BaseModel):
     worker_id: str
-    base_url: AnyHttpUrl
+    base_url: str | None = None
     load: float = 0.0
 
 
 class HeartbeatRequest(BaseModel):
     worker_id: str
-    base_url: AnyHttpUrl | None = None
+    base_url: str | None = None
     load: float | None = None
 
 

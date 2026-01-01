@@ -1,6 +1,6 @@
 from dataclasses import asdict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from mini_snowflake.orquestrator.orquestrator import route_external_query
 
 from .models import (
@@ -15,30 +15,27 @@ app = FastAPI(title="orchestrator")
 
 
 @app.post("/workers/register")
-def register(req: RegisterRequest):
-    registry.upsert(req.worker_id, str(req.base_url), req.load)
+def register(req: RegisterRequest, request: Request):
+    # If worker didn't provide base_url, infer from source IP.
+    host = request.client.host
+    base_url = str(req.base_url) if req.base_url else f"http://{host}:8000"
+    registry.upsert(req.worker_id, base_url, req.load)
     return {"ok": True}
-
 
 @app.post("/workers/heartbeat")
-def heartbeat(req: HeartbeatRequest):
+def heartbeat(req: HeartbeatRequest, request: Request):
     try:
-        registry.heartbeat(
-            req.worker_id, str(req.base_url) if req.base_url else None, req.load
-        )
+        host = request.client.host
+        base_url = str(req.base_url) if req.base_url else f"http://{host}:8000"
+        registry.heartbeat(req.worker_id, base_url, req.load)
     except KeyError:
-        raise HTTPException(
-            status_code=404,
-            detail="worker not registered",
-        ) from None
+        raise HTTPException(status_code=404, detail="worker not registered") from None
     return {"ok": True}
-
 
 @app.get("/workers")
 def list_workers():
     active = registry.list_active()
     return {"active": [asdict(w) for w in active]}
-
 
 @app.post("/query", response_model=ExternalQueryResponse)
 def query(req: ExternalQueryRequest) -> ExternalQueryResponse:

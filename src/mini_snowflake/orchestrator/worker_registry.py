@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+import threading
+from itertools import count
 
 
 @dataclass
@@ -14,6 +16,8 @@ class WorkerRegistry:
     def __init__(self, ttl_seconds: int = 45):
         self.ttl = timedelta(seconds=ttl_seconds)
         self.workers: dict[str, WorkerInfo] = {}
+        self._lock = threading.Lock()
+        self._rr = count(0)
 
     def upsert(self, worker_id: str, base_url: str, load: float) -> None:
         self.workers[worker_id] = WorkerInfo(
@@ -38,6 +42,13 @@ class WorkerRegistry:
     def list_active(self) -> list[WorkerInfo]:
         now = datetime.now(UTC)
         return [w for w in self.workers.values() if (now - w.last_seen) <= self.ttl]
+
+    def choose_worker(self) -> WorkerInfo:
+        active = self.list_active()
+        if not active:
+            raise RuntimeError("No active workers")
+        i = next(self._rr)
+        return active[i % len(active)]
 
 
 registry = WorkerRegistry(ttl_seconds=45)

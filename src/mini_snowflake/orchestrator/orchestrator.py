@@ -8,8 +8,8 @@ from typing import Any
 from mini_snowflake.common.db_conn import DBConn
 from mini_snowflake.common.manifest import Manifest
 from mini_snowflake.common.utils import setup_logging
-from mini_snowflake.orquestrator.models import ExternalQueryResponse, KindType
-from mini_snowflake.orquestrator.query_maker import (
+from mini_snowflake.orchestrator.models import ExternalQueryResponse, KindType
+from mini_snowflake.orchestrator.query_maker import (
     create_final_reduce_job,
     create_intermediate_reduce_job,
     create_map_job,
@@ -209,7 +209,7 @@ def _get_first_worker_blocking(
     while True:
         workers = registry.list_active()
         if workers:
-            return workers[0]
+            return registry.choose_worker()
 
         logger.error("No active workers; waiting...")
         sleep(0.5)

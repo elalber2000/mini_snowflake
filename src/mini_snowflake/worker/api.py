@@ -41,11 +41,11 @@ def execute_task(
 
         if isinstance(task, CreateRequest):
             result = worker_create(conn, task)
-        if isinstance(task, DropRequest):
+        elif isinstance(task, DropRequest):
             result = worker_drop(conn, task)
-        if isinstance(task, InsertRequest):
+        elif isinstance(task, InsertRequest):
             result = worker_insert(conn, task)
-        if isinstance(task, SelectRequest):
+        elif isinstance(task, SelectRequest):
             result = worker_select(conn, task)
 
         if result is not None:

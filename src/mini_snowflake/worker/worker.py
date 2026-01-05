@@ -61,6 +61,16 @@ DUCKDB_TO_ARROW: dict[str, pa.DataType] = {
     "interval": pa.duration("us"),
 }
 
+def init_worker(db_path: str, threads: int = 1):
+    global DUCK
+    DUCK = duckdb.connect(db_path)
+    DUCK.execute(f"PRAGMA threads={threads}")
+
+def get_conn() -> duckdb.DuckDBPyConnection:
+    if DUCK is None:
+        raise RuntimeError("DuckDB not initialized. Call init_worker() at startup.")
+    return DUCK
+
 
 def worker_create(
     conn: DBConn,
@@ -234,16 +244,10 @@ def worker_insert(
     return f"Successfully inserted data into table '{table}'"
 
 
-@lru_cache(maxsize=1)
-def _get_duckdb_conn() -> duckdb.DuckDBPyConnection:
-    return duckdb.connect(":memory:")
-
-
 def worker_select(
     conn: DBConn,
     request: SelectRequest,
 ) -> str:
-    logger.info(f"worker_select({request})")
-    con = _get_duckdb_conn()
-    con.execute(request.raw_query)
+    duckconn = get_conn()
+    duckconn.execute(request.raw_query).fetchall()
     return f"Successfully executed query {' '.join(request.raw_query.split())}"

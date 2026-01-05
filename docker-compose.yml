@@ -1,7 +1,7 @@
 services:
   orchestrator:
     build: .
-    command: uvicorn mini_snowflake.orquestrator.api:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn mini_snowflake.orchestrator.api:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./src:/app/src
     ports:

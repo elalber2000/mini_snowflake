@@ -1,7 +1,7 @@
 from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException, Request
-from mini_snowflake.orquestrator.orquestrator import route_external_query
+from mini_snowflake.orchestrator.orchestrator import route_external_query
 
 from .models import (
     ExternalQueryRequest,

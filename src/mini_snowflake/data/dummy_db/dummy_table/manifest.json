@@ -1,0 +1,24 @@
+{
+  "created_at": "2025-12-26T20:14:34+00:00",
+  "manifest_version": 1,
+  "rows_per_shard": 100000,
+  "schema": [
+    {
+      "name": "col1",
+      "nullable": true,
+      "type": "int"
+    },
+    {
+      "name": "col2",
+      "nullable": true,
+      "type": "varchar"
+    }
+  ],
+  "shards": [
+    "shard-0.parquet",
+    "shard-1.parquet",
+    "shard-2.parquet"
+  ],
+  "table_id": "c0c532f5-34fc-478d-8eb1-6fb2c2e65dc7",
+  "table_name": "dummy_table"
+}
